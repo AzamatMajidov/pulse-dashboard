@@ -262,26 +262,31 @@
     .net-row {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 8px;
       margin-top: 10px;
+      white-space: nowrap;
+      overflow: hidden;
     }
 
     .net-label {
       font-size: 11px;
       color: var(--text-muted);
       width: 28px;
+      flex-shrink: 0;
       text-transform: uppercase;
       letter-spacing: 0.1em;
     }
 
     .net-value {
       font-family: 'JetBrains Mono', monospace;
-      font-size: 16px;
+      font-size: 15px;
       color: var(--text);
       flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
-    .net-icon { font-size: 14px; }
+    .net-icon { font-size: 14px; flex-shrink: 0; }
 
     /* === SERVICES CARD === */
     .service-list { display: flex; flex-direction: column; gap: 10px; }
@@ -566,7 +571,7 @@
 
       <!-- RAM -->
       <div class="card" id="card-ram">
-        <div class="card-label"><span class="icon">🧠</span> Memory</div>
+        <div class="card-label"><span class="icon">🧠</span> RAM</div>
         <div class="card-value"><span id="ram-used">--</span><span class="unit">GB</span></div>
         <div class="card-sub" id="ram-sub">of -- GB used · --%</div>
         <div class="progress-wrap">
