@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pulse</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0f1117;
+      --bg2: #151820;
+      --bg3: #1c2030;
+      --border: #ffffff10;
+      --border-hover: #22d3ee30;
+      --cyan: #22d3ee;
+      --cyan-dim: #22d3ee20;
+      --cyan-glow: #22d3ee40;
+      --text: #e2e8f0;
+      --text-dim: #94a3b8;
+      --text-muted: #475569;
+      --green: #4ade80;
+      --green-dim: #4ade8020;
+      --red: #f87171;
+      --red-dim: #f8717120;
+      --yellow: #fbbf24;
+      --radius: 12px;
+      --radius-sm: 8px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
+      min-height: 100vh;
+      padding: 24px;
+      overflow-x: hidden;
+    }
+
+    /* Subtle grid background */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(var(--border) 1px, transparent 1px),
+        linear-gradient(90deg, var(--border) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .container {
+      max-width: 1800px;
+      margin: 0 auto;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* === HERO BAR === */
+    .hero {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      gap: 24px;
+      margin-bottom: 28px;
+      padding: 24px 32px;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+    }
+
+    .hero-left { display: flex; flex-direction: column; gap: 2px; }
+    .hero-center { text-align: center; }
+    .hero-right { display: flex; justify-content: flex-end; }
+
+    .hero-title {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--cyan);
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+    }
+
+    .hero-hostname {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    #clock {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 52px;
+      font-weight: 500;
+      color: var(--cyan);
+      line-height: 1;
+      letter-spacing: -1px;
+      text-shadow: 0 0 30px var(--cyan-glow);
+    }
+
+    #date {
+      font-size: 13px;
+      color: var(--text-dim);
+      margin-top: 4px;
+      letter-spacing: 0.05em;
+    }
+
+    .weather-widget {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 12px 20px;
+    }
+
+    .weather-icon { font-size: 28px; }
+
+    .weather-info { display: flex; flex-direction: column; }
+
+    .weather-temp {
+      font-size: 22px;
+      font-weight: 600;
+      color: var(--text);
+      line-height: 1;
+    }
+
+    .weather-desc {
+      font-size: 12px;
+      color: var(--text-dim);
+      margin-top: 2px;
+    }
+
+    /* === SECTION HEADER === */
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .section-title {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+    }
+
+    .section-line {
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    /* === GRID LAYOUTS === */
+    .grid-4 {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+
+    /* === CARD === */
+    .card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card:hover {
+      border-color: var(--border-hover);
+      box-shadow: 0 0 20px var(--cyan-dim);
+    }
+
+    .card-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .card-label .icon { font-size: 14px; }
+
+    .card-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 32px;
+      font-weight: 500;
+      color: var(--text);
+      line-height: 1;
+    }
+
+    .card-value .unit {
+      font-size: 14px;
+      color: var(--text-dim);
+      margin-left: 2px;
+    }
+
+    .card-sub {
+      font-size: 12px;
+      color: var(--text-dim);
+      margin-top: 8px;
+    }
+
+    /* Progress bar */
+    .progress-wrap {
+      margin-top: 12px;
+      background: var(--bg3);
+      border-radius: 4px;
+      height: 4px;
+      overflow: hidden;
+    }
+
+    .progress-bar {
+      height: 100%;
+      border-radius: 4px;
+      background: var(--cyan);
+      transition: width 0.5s ease;
+    }
+
+    .progress-bar.warn { background: var(--yellow); }
+    .progress-bar.danger { background: var(--red); }
+
+    /* Temp color */
+    .temp-ok { color: var(--cyan); }
+    .temp-warn { color: var(--yellow); }
+    .temp-hot { color: var(--red); }
+
+    /* === NETWORK CARD === */
+    .net-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .net-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      width: 28px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+
+    .net-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 16px;
+      color: var(--text);
+      flex: 1;
+    }
+
+    .net-icon { font-size: 14px; }
+
+    /* === SERVICES CARD === */
+    .service-list { display: flex; flex-direction: column; gap: 10px; }
+
+    .service-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      background: var(--bg3);
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      transition: border-color 0.2s;
+    }
+
+    .service-row:hover { border-color: var(--border-hover); }
+
+    .service-left { display: flex; align-items: center; gap: 10px; }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .status-dot.online {
+      background: var(--green);
+      box-shadow: 0 0 8px var(--green);
+      animation: pulse-dot 2s infinite;
+    }
+
+    .status-dot.offline {
+      background: var(--red);
+    }
+
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    .service-name {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .service-badge {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-weight: 500;
+    }
+
+    .badge-green {
+      background: var(--green-dim);
+      color: var(--green);
+    }
+
+    .badge-red {
+      background: var(--red-dim);
+      color: var(--red);
+    }
+
+    .service-uptime {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* === BOT CARDS === */
+    .bot-card {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .bot-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .bot-name {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .bot-emoji { font-size: 24px; }
+
+    .bot-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .bot-role {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 1px;
+    }
+
+    .bot-status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .bot-status.online { color: var(--green); }
+    .bot-status.offline { color: var(--red); }
+
+    .bot-stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 10px;
+    }
+
+    .bot-stat {
+      background: var(--bg3);
+      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+    }
+
+    .bot-stat-label {
+      font-size: 10px;
+      color: var(--text-muted);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+
+    .bot-stat-value {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* === REFRESH INDICATOR === */
+    .footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 8px;
+      padding: 0 4px;
+    }
+
+    .refresh-info {
+      font-size: 11px;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .refresh-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--cyan);
+      animation: blink 2s infinite;
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.2; }
+    }
+
+    .last-updated {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* Fade-in on data update */
+    .updated {
+      animation: flash 0.3s ease;
+    }
+
+    @keyframes flash {
+      0% { opacity: 0.5; }
+      100% { opacity: 1; }
+    }
+
+    /* Tailscale badge in footer */
+    .tailscale-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11px;
+      padding: 3px 10px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <!-- HERO -->
+    <div class="hero">
+      <div class="hero-left">
+        <div class="hero-title">🫀 Pulse</div>
+        <div class="hero-hostname">azamat-Intel · home server</div>
+      </div>
+      <div class="hero-center">
+        <div id="clock">00:00:00</div>
+        <div id="date">Loading...</div>
+      </div>
+      <div class="hero-right">
+        <div class="weather-widget">
+          <div class="weather-icon" id="weather-icon">🌡️</div>
+          <div class="weather-info">
+            <div class="weather-temp"><span id="weather-temp">--</span>°C</div>
+            <div class="weather-desc" id="weather-desc">Tashkent</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SYSTEM METRICS -->
+    <div class="section-header">
+      <div class="section-title">System</div>
+      <div class="section-line"></div>
+    </div>
+
+    <div class="grid-4">
+      <!-- CPU -->
+      <div class="card" id="card-cpu">
+        <div class="card-label"><span class="icon">⚡</span> CPU</div>
+        <div class="card-value"><span id="cpu-usage">--</span><span class="unit">%</span></div>
+        <div class="card-sub" id="cpu-temp">Temp: --°C</div>
+        <div class="progress-wrap">
+          <div class="progress-bar" id="cpu-bar" style="width:0%"></div>
+        </div>
+      </div>
+
+      <!-- RAM -->
+      <div class="card" id="card-ram">
+        <div class="card-label"><span class="icon">🧠</span> Memory</div>
+        <div class="card-value"><span id="ram-used">--</span><span class="unit">GB</span></div>
+        <div class="card-sub" id="ram-sub">of -- GB used · --%</div>
+        <div class="progress-wrap">
+          <div class="progress-bar" id="ram-bar" style="width:0%"></div>
+        </div>
+      </div>
+
+      <!-- Disk -->
+      <div class="card" id="card-disk">
+        <div class="card-label"><span class="icon">💾</span> Disk</div>
+        <div class="card-value"><span id="disk-used">--</span><span class="unit">GB</span></div>
+        <div class="card-sub" id="disk-sub">of -- GB used · --%</div>
+        <div class="progress-wrap">
+          <div class="progress-bar" id="disk-bar" style="width:0%"></div>
+        </div>
+      </div>
+
+      <!-- Network -->
+      <div class="card" id="card-net">
+        <div class="card-label"><span class="icon">🌐</span> Network <span style="color:var(--text-muted);font-size:10px;margin-left:4px;font-family:'JetBrains Mono',monospace">enp2s0</span></div>
+        <div class="net-row">
+          <div class="net-icon">↓</div>
+          <div class="net-label">Down</div>
+          <div class="net-value" id="net-down">-- KB/s</div>
+        </div>
+        <div class="net-row">
+          <div class="net-icon">↑</div>
+          <div class="net-label">Up</div>
+          <div class="net-value" id="net-up">-- KB/s</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SERVICES -->
+    <div class="section-header">
+      <div class="section-title">Services</div>
+      <div class="section-line"></div>
+    </div>
+
+    <div class="grid-2">
+      <!-- Docker -->
+      <div class="card">
+        <div class="card-label"><span class="icon">🐳</span> Docker Containers</div>
+        <div class="service-list" id="docker-list">
+          <div class="service-row"><div class="service-left"><div class="status-dot offline"></div><div class="service-name">Loading...</div></div></div>
+        </div>
+      </div>
+
+      <!-- Systemd -->
+      <div class="card">
+        <div class="card-label"><span class="icon">⚙️</span> System Services</div>
+        <div class="service-list" id="systemd-list">
+          <div class="service-row"><div class="service-left"><div class="status-dot offline"></div><div class="service-name">Loading...</div></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- BOTS -->
+    <div class="section-header">
+      <div class="section-title">Agents</div>
+      <div class="section-line"></div>
+    </div>
+
+    <div class="grid-2">
+      <!-- Qulvachcha -->
+      <div class="card bot-card" id="bot-q">
+        <div class="bot-header">
+          <div class="bot-name">
+            <div class="bot-emoji">🐣</div>
+            <div>
+              <div class="bot-title">Qulvachcha</div>
+              <div class="bot-role">Work · Dev &amp; Product</div>
+            </div>
+          </div>
+          <div class="bot-status offline" id="q-status">● Offline</div>
+        </div>
+        <div class="bot-stats">
+          <div class="bot-stat">
+            <div class="bot-stat-label">Last Active</div>
+            <div class="bot-stat-value" id="q-last">--</div>
+          </div>
+          <div class="bot-stat">
+            <div class="bot-stat-label">Model</div>
+            <div class="bot-stat-value" id="q-model">--</div>
+          </div>
+          <div class="bot-stat">
+            <div class="bot-stat-label">Uptime</div>
+            <div class="bot-stat-value" id="q-uptime">--</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Oshna -->
+      <div class="card bot-card" id="bot-o">
+        <div class="bot-header">
+          <div class="bot-name">
+            <div class="bot-emoji">🌸</div>
+            <div>
+              <div class="bot-title">Oshna</div>
+              <div class="bot-role">Personal · Life &amp; Schedule</div>
+            </div>
+          </div>
+          <div class="bot-status offline" id="o-status">● Offline</div>
+        </div>
+        <div class="bot-stats">
+          <div class="bot-stat">
+            <div class="bot-stat-label">Last Active</div>
+            <div class="bot-stat-value" id="o-last">--</div>
+          </div>
+          <div class="bot-stat">
+            <div class="bot-stat-label">Model</div>
+            <div class="bot-stat-value" id="o-model">--</div>
+          </div>
+          <div class="bot-stat">
+            <div class="bot-stat-label">Uptime</div>
+            <div class="bot-stat-value" id="o-uptime">--</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FOOTER -->
+    <div class="footer">
+      <div class="refresh-info">
+        <div class="refresh-dot"></div>
+        Auto-refresh every 10s
+      </div>
+      <div class="last-updated" id="last-updated">--</div>
+    </div>
+
+  </div>
+
+  <script>
+    // Clock
+    function updateClock() {
+      const now = new Date();
+      document.getElementById('clock').textContent =
+        now.toLocaleTimeString('en-GB', { hour12: false });
+      document.getElementById('date').textContent =
+        now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    // Progress bar class
+    function barClass(pct) {
+      if (pct >= 90) return 'danger';
+      if (pct >= 70) return 'warn';
+      return '';
+    }
+
+    function setBar(id, pct) {
+      const bar = document.getElementById(id);
+      bar.style.width = pct + '%';
+      bar.className = 'progress-bar ' + barClass(pct);
+    }
+
+    function flash(el) {
+      el.classList.remove('updated');
+      void el.offsetWidth;
+      el.classList.add('updated');
+    }
+
+    // Render docker list
+    function renderDocker(containers) {
+      const list = document.getElementById('docker-list');
+      list.innerHTML = containers.map(c => `
+        <div class="service-row">
+          <div class="service-left">
+            <div class="status-dot ${c.running ? 'online' : 'offline'}"></div>
+            <div class="service-name">${c.name.replace('roast-', '')}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <span class="service-badge ${c.running ? 'badge-green' : 'badge-red'}">${c.running ? 'running' : 'stopped'}</span>
+            <span class="service-uptime">${c.uptime || ''}</span>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // Render systemd list
+    function renderSystemd(services) {
+      const list = document.getElementById('systemd-list');
+      list.innerHTML = services.map(s => `
+        <div class="service-row">
+          <div class="service-left">
+            <div class="status-dot ${s.active ? 'online' : 'offline'}"></div>
+            <div class="service-name">${s.name}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <span class="service-badge ${s.active ? 'badge-green' : 'badge-red'}">${s.active ? 'active' : 'inactive'}</span>
+            <span class="service-uptime">${s.uptime || ''}</span>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // Render bot
+    function renderBot(prefix, bot) {
+      const statusEl = document.getElementById(prefix + '-status');
+      statusEl.textContent = bot.online ? '● Online' : '● Offline';
+      statusEl.className = 'bot-status ' + (bot.online ? 'online' : 'offline');
+      document.getElementById(prefix + '-last').textContent = bot.lastActive || '--';
+      document.getElementById(prefix + '-model').textContent = (bot.model || '--').replace('claude-', '');
+      document.getElementById(prefix + '-uptime').textContent = bot.uptime || '--';
+    }
+
+    // Fetch and render metrics
+    async function fetchMetrics() {
+      try {
+        const res = await fetch('/api/metrics');
+        const d = await res.json();
+
+        // Weather
+        document.getElementById('weather-icon').textContent = d.weather?.icon || '🌡️';
+        document.getElementById('weather-temp').textContent = d.weather?.temp ?? '--';
+        document.getElementById('weather-desc').textContent = d.weather?.description || 'Tashkent';
+
+        // CPU
+        const cpuPct = d.system?.cpu?.usage ?? 0;
+        document.getElementById('cpu-usage').textContent = cpuPct;
+        setBar('cpu-bar', cpuPct);
+        const temp = d.system?.cpu?.temp;
+        const tempEl = document.getElementById('cpu-temp');
+        if (temp !== null && temp !== undefined) {
+          tempEl.textContent = `Temp: ${temp}°C`;
+          tempEl.className = 'card-sub ' + (temp >= 80 ? 'temp-hot' : temp >= 65 ? 'temp-warn' : 'temp-ok');
+        } else {
+          tempEl.textContent = 'Temp: N/A';
+        }
+        flash(document.getElementById('card-cpu'));
+
+        // RAM
+        const ram = d.system?.ram;
+        if (ram) {
+          document.getElementById('ram-used').textContent = ram.used;
+          document.getElementById('ram-sub').textContent = `of ${ram.total} GB used · ${ram.percent}%`;
+          setBar('ram-bar', ram.percent);
+          flash(document.getElementById('card-ram'));
+        }
+
+        // Disk
+        const disk = d.system?.disk;
+        if (disk) {
+          document.getElementById('disk-used').textContent = disk.used;
+          document.getElementById('disk-sub').textContent = `of ${disk.total} GB used · ${disk.percent}%`;
+          setBar('disk-bar', disk.percent);
+          flash(document.getElementById('card-disk'));
+        }
+
+        // Network
+        const net = d.system?.network;
+        if (net) {
+          document.getElementById('net-down').textContent = net.downFormatted || '0 B/s';
+          document.getElementById('net-up').textContent = net.upFormatted || '0 B/s';
+          flash(document.getElementById('card-net'));
+        }
+
+        // Docker
+        if (d.services?.docker) renderDocker(d.services.docker);
+
+        // Systemd
+        if (d.services?.systemd) renderSystemd(d.services.systemd);
+
+        // Bots
+        if (d.bots?.qulvachcha) renderBot('q', d.bots.qulvachcha);
+        if (d.bots?.oshna) renderBot('o', d.bots.oshna);
+
+        // Last updated
+        const ts = new Date(d.timestamp);
+        document.getElementById('last-updated').textContent =
+          'Updated ' + ts.toLocaleTimeString('en-GB', { hour12: false });
+
+      } catch (err) {
+        console.error('Fetch error:', err);
+      }
+    }
+
+    fetchMetrics();
+    setInterval(fetchMetrics, 10000);
+  </script>
+</body>
+</html>
