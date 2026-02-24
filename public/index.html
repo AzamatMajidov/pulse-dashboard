@@ -259,34 +259,38 @@
     .temp-hot { color: var(--red); }
 
     /* === NETWORK CARD === */
-    .net-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-top: 10px;
-      white-space: nowrap;
-      overflow: hidden;
+    .net-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 12px;
     }
 
-    .net-label {
-      font-size: 11px;
+    .net-item {
+      background: var(--bg3);
+      border-radius: var(--radius-sm);
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+    }
+
+    .net-item-label {
+      font-size: 10px;
       color: var(--text-muted);
-      width: 28px;
-      flex-shrink: 0;
       text-transform: uppercase;
       letter-spacing: 0.1em;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
     }
 
-    .net-value {
+    .net-item-value {
       font-family: 'JetBrains Mono', monospace;
-      font-size: 15px;
+      font-size: 14px;
+      font-weight: 500;
       color: var(--text);
-      flex: 1;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      white-space: nowrap;
     }
-
-    .net-icon { font-size: 14px; flex-shrink: 0; }
 
     /* === SERVICES CARD === */
     .service-list { display: flex; flex-direction: column; gap: 10px; }
@@ -592,15 +596,15 @@
       <!-- Network -->
       <div class="card" id="card-net">
         <div class="card-label"><span class="icon">🌐</span> Network <span style="color:var(--text-muted);font-size:10px;margin-left:4px;font-family:'JetBrains Mono',monospace">enp2s0</span></div>
-        <div class="net-row">
-          <div class="net-icon">↓</div>
-          <div class="net-label">Down</div>
-          <div class="net-value" id="net-down">-- KB/s</div>
-        </div>
-        <div class="net-row">
-          <div class="net-icon">↑</div>
-          <div class="net-label">Up</div>
-          <div class="net-value" id="net-up">-- KB/s</div>
+        <div class="net-grid">
+          <div class="net-item">
+            <div class="net-item-label">↓ Down</div>
+            <div class="net-item-value" id="net-down">-- KB/s</div>
+          </div>
+          <div class="net-item">
+            <div class="net-item-label">↑ Up</div>
+            <div class="net-item-value" id="net-up">-- KB/s</div>
+          </div>
         </div>
       </div>
     </div>
