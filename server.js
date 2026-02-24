@@ -1,19 +1,24 @@
 const express = require('express');
 const { exec } = require('child_process');
 const fs = require('fs');
-const https = require('https');
 const http = require('http');
 const path = require('path');
 
-const app = express();
-const PORT = 6682;
-const NETWORK_IFACE = 'enp2s0';
+// --- Config ---
+const CONFIG = {
+  port: 6682,
+  networkIface: 'enp2s0',
+  weatherLocation: 'Tashkent',
+  weatherCacheTtl: 10 * 60 * 1000,   // 10 minutes
+  botCacheTtl: 30 * 1000,             // 30 seconds
+  dockerContainers: ['roast-postgres', 'mongo', 'roast-redis'],
+  systemdServices: ['kuydirchi'],
+};
 
+const app = express();
+
+// Serve static files (same-origin requests don't need CORS)
 app.use(express.static(path.join(__dirname, 'public')));
-app.use((req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  next();
-});
 
 // --- Helpers ---
 
@@ -29,24 +34,27 @@ function sleep(ms) {
   return new Promise(r => setTimeout(r, ms));
 }
 
-// --- CPU Usage ---
-let lastCpuStats = null;
-
-function readCpuStats() {
-  const raw = fs.readFileSync('/proc/stat', 'utf8').split('\n')[0];
-  const parts = raw.trim().split(/\s+/).slice(1).map(Number);
+// --- CPU Usage (async file I/O) ---
+async function readCpuStats() {
+  const raw = await fs.promises.readFile('/proc/stat', 'utf8');
+  const parts = raw.split('\n')[0].trim().split(/\s+/).slice(1).map(Number);
   const idle = parts[3] + parts[4];
   const total = parts.reduce((a, b) => a + b, 0);
   return { idle, total };
 }
 
 async function getCpuUsage() {
-  const a = readCpuStats();
-  await sleep(500);
-  const b = readCpuStats();
-  const idleDelta = b.idle - a.idle;
-  const totalDelta = b.total - a.total;
-  return totalDelta === 0 ? 0 : Math.round((1 - idleDelta / totalDelta) * 100);
+  try {
+    const a = await readCpuStats();
+    await sleep(500);
+    const b = await readCpuStats();
+    const idleDelta = b.idle - a.idle;
+    const totalDelta = b.total - a.total;
+    return totalDelta === 0 ? 0 : Math.round((1 - idleDelta / totalDelta) * 100);
+  } catch (err) {
+    console.error('getCpuUsage failed:', err.message);
+    return null;
+  }
 }
 
 // --- CPU Temp ---
@@ -59,36 +67,41 @@ async function getCpuTemp() {
       const pkg = core['Package id 0'];
       if (pkg) return Math.round(Object.values(pkg).find(v => typeof v === 'number' && v > 0));
     }
-    // fallback: acpi
     const acpi = data['acpitz-acpi-0'];
     if (acpi && acpi.temp1) return Math.round(Object.values(acpi.temp1).find(v => typeof v === 'number' && v > 0));
-  } catch {}
+  } catch (err) {
+    console.error('getCpuTemp failed:', err.message);
+  }
   return null;
 }
 
-// --- RAM ---
-function getRam() {
-  const raw = fs.readFileSync('/proc/meminfo', 'utf8');
-  const get = (key) => {
-    const m = raw.match(new RegExp(`^${key}:\\s+(\\d+)`, 'm'));
-    return m ? parseInt(m[1]) * 1024 : 0;
-  };
-  const total = get('MemTotal');
-  const available = get('MemAvailable');
-  const used = total - available;
-  return {
-    used: +(used / 1e9).toFixed(1),
-    total: +(total / 1e9).toFixed(1),
-    percent: Math.round((used / total) * 100)
-  };
+// --- RAM (async file I/O) ---
+async function getRam() {
+  try {
+    const raw = await fs.promises.readFile('/proc/meminfo', 'utf8');
+    const get = (key) => {
+      const m = raw.match(new RegExp(`^${key}:\\s+(\\d+)`, 'm'));
+      return m ? parseInt(m[1]) * 1024 : 0;
+    };
+    const total = get('MemTotal');
+    const available = get('MemAvailable');
+    const used = total - available;
+    return {
+      used: +(used / 1e9).toFixed(1),
+      total: +(total / 1e9).toFixed(1),
+      percent: Math.round((used / total) * 100)
+    };
+  } catch (err) {
+    console.error('getRam failed:', err.message);
+    return null;
+  }
 }
 
 // --- Disk ---
 async function getDisk() {
   try {
     const out = await run('df -B1 /');
-    const lines = out.split('\n');
-    const parts = lines[1].trim().split(/\s+/);
+    const parts = out.split('\n')[1].trim().split(/\s+/);
     const total = parseInt(parts[1]);
     const used = parseInt(parts[2]);
     const free = parseInt(parts[3]);
@@ -98,65 +111,69 @@ async function getDisk() {
       free: +(free / 1e9).toFixed(1),
       percent: Math.round((used / total) * 100)
     };
-  } catch { return null; }
+  } catch (err) {
+    console.error('getDisk failed:', err.message);
+    return null;
+  }
 }
 
-// --- Network Speed ---
+// --- Network Speed (async file I/O) ---
 let lastNetStats = null;
 let lastNetTime = null;
 
-function readNetStats() {
-  const raw = fs.readFileSync('/proc/net/dev', 'utf8');
-  const line = raw.split('\n').find(l => l.includes(NETWORK_IFACE));
+async function readNetStats() {
+  const raw = await fs.promises.readFile('/proc/net/dev', 'utf8');
+  const line = raw.split('\n').find(l => l.includes(CONFIG.networkIface));
   if (!line) return null;
   const parts = line.trim().split(/\s+/);
   return { rx: parseInt(parts[1]), tx: parseInt(parts[9]) };
 }
 
-function getNetworkSpeed() {
-  const now = Date.now();
-  const current = readNetStats();
-  if (!current) return { up: 0, down: 0 };
-  if (!lastNetStats || !lastNetTime) {
+async function getNetworkSpeed() {
+  try {
+    const now = Date.now();
+    const current = await readNetStats();
+    if (!current) return { up: 0, down: 0 };
+    if (!lastNetStats || !lastNetTime) {
+      lastNetStats = current;
+      lastNetTime = now;
+      return { up: 0, down: 0 };
+    }
+    const dt = (now - lastNetTime) / 1000;
+    const down = Math.round((current.rx - lastNetStats.rx) / dt);
+    const up = Math.round((current.tx - lastNetStats.tx) / dt);
     lastNetStats = current;
     lastNetTime = now;
+    return { up: Math.max(0, up), down: Math.max(0, down) };
+  } catch (err) {
+    console.error('getNetworkSpeed failed:', err.message);
     return { up: 0, down: 0 };
   }
-  const dt = (now - lastNetTime) / 1000;
-  const down = Math.round((current.rx - lastNetStats.rx) / dt);
-  const up = Math.round((current.tx - lastNetStats.tx) / dt);
-  lastNetStats = current;
-  lastNetTime = now;
-  return {
-    up: Math.max(0, up),
-    down: Math.max(0, down)
-  };
 }
 
 // --- Docker ---
 async function getDockerContainers() {
-  const targets = ['roast-postgres', 'mongo', 'roast-redis'];
   try {
     const out = await run('docker ps -a --format "{{.Names}}|{{.Status}}"');
     const lines = out.split('\n').filter(Boolean);
-    return targets.map(name => {
+    return CONFIG.dockerContainers.map(name => {
       const line = lines.find(l => l.startsWith(name + '|'));
-      if (!line) return { name, status: 'not found', running: false, uptime: '' };
+      if (!line) return { name, running: false, uptime: '' };
       const [, statusFull] = line.split('|');
       const running = statusFull.toLowerCase().startsWith('up');
       const uptime = statusFull.replace(/^Up\s+/i, '').replace(/^Exited.*/, 'stopped');
       return { name, running, uptime: running ? uptime : 'stopped' };
     });
-  } catch {
-    return targets.map(name => ({ name, running: false, uptime: 'N/A' }));
+  } catch (err) {
+    console.error('getDockerContainers failed:', err.message);
+    return CONFIG.dockerContainers.map(name => ({ name, running: false, uptime: 'N/A' }));
   }
 }
 
 // --- Systemd Services ---
 async function getSystemdServices() {
-  const services = ['kuydirchi'];
   const results = [];
-  for (const svc of services) {
+  for (const svc of CONFIG.systemdServices) {
     try {
       const status = await run(`systemctl --user is-active ${svc}`);
       const tsRaw = await run(`systemctl --user show ${svc} --property=ActiveEnterTimestamp`);
@@ -165,59 +182,52 @@ async function getSystemdServices() {
       let uptime = 'N/A';
       if (active && ts) {
         const since = new Date(ts);
-        if (!isNaN(since)) {
-          const diff = Math.floor((Date.now() - since) / 1000);
-          uptime = formatDuration(diff);
-        }
+        if (!isNaN(since)) uptime = formatDuration(Math.floor((Date.now() - since) / 1000));
       }
       results.push({ name: svc, active, uptime });
-    } catch {
+    } catch (err) {
+      console.error(`getSystemdServices failed for ${svc}:`, err.message);
       results.push({ name: svc, active: false, uptime: 'N/A' });
     }
   }
   return results;
 }
 
-// --- Bot Status Cache (openclaw status takes ~8s) ---
+// --- Bot Status (cached, openclaw takes ~8s) ---
 const botCache = {};
-const BOT_CACHE_TTL = 30000;
 
 async function getBotStatus(profile) {
   const key = profile || 'main';
   const now = Date.now();
-  if (botCache[key] && now - botCache[key].time < BOT_CACHE_TTL) {
+  if (botCache[key] && now - botCache[key].time < CONFIG.botCacheTtl) {
     return botCache[key].data;
   }
   try {
     const cmd = profile ? `openclaw --profile ${profile} status` : 'openclaw status';
     const out = await run(cmd, 15000);
     const online = out.includes('reachable') && !out.includes('unreachable') && !out.includes('error');
-    // Parse "default main active 4m ago" or "active just now"
     const lastMatch = out.match(/active\s+(just now|\d+[smhd]\s+ago|\d+\s+\w+\s+ago)/i);
     const lastActive = lastMatch ? lastMatch[1].trim() : 'unknown';
     const modelMatch = out.match(/claude-[a-z0-9.-]+/);
     const model = modelMatch ? modelMatch[0] : 'unknown';
-    // Uptime from systemd
     const svcName = profile ? `openclaw-${profile}` : 'openclaw-gateway';
     const tsRaw = await run(`systemctl --user show ${svcName} --property=ActiveEnterTimestamp`);
     const ts = tsRaw.replace('ActiveEnterTimestamp=', '').trim();
     let uptime = 'N/A';
     if (ts) {
       const since = new Date(ts);
-      if (!isNaN(since)) {
-        const diff = Math.floor((Date.now() - since) / 1000);
-        uptime = formatDuration(diff);
-      }
+      if (!isNaN(since)) uptime = formatDuration(Math.floor((Date.now() - since) / 1000));
     }
     const result = { online, lastActive, model, uptime };
     botCache[key] = { time: now, data: result };
     return result;
-  } catch {
+  } catch (err) {
+    console.error(`getBotStatus(${key}) failed:`, err.message);
     return { online: false, lastActive: 'N/A', model: 'N/A', uptime: 'N/A' };
   }
 }
 
-// --- Weather Cache ---
+// --- Weather (cached) ---
 let weatherCache = null;
 let weatherCacheTime = 0;
 
@@ -235,25 +245,25 @@ function httpGet(url, redirects = 5) {
   });
 }
 
-function fetchWeather() {
-  return new Promise(async (resolve) => {
-    const now = Date.now();
-    if (weatherCache && now - weatherCacheTime < 10 * 60 * 1000) {
-      return resolve(weatherCache);
-    }
-    try {
-      const data = await httpGet('https://wttr.in/Tashkent?format=j1');
-      const json = JSON.parse(data);
-      const current = json.current_condition[0];
-      const temp = parseInt(current.temp_C);
-      const desc = current.weatherDesc[0].value;
-      const code = parseInt(current.weatherCode);
-      const icon = weatherIcon(code);
-      weatherCache = { temp, description: desc, icon };
-      weatherCacheTime = now;
-      resolve(weatherCache);
-    } catch { resolve({ temp: null, description: 'N/A', icon: '🌡️' }); }
-  });
+async function fetchWeather() {
+  const now = Date.now();
+  if (weatherCache && now - weatherCacheTime < CONFIG.weatherCacheTtl) {
+    return weatherCache;
+  }
+  try {
+    const data = await httpGet(`https://wttr.in/${CONFIG.weatherLocation}?format=j1`);
+    const json = JSON.parse(data);
+    const current = json.current_condition[0];
+    const temp = parseInt(current.temp_C);
+    const desc = current.weatherDesc[0].value;
+    const icon = weatherIcon(parseInt(current.weatherCode));
+    weatherCache = { temp, description: desc, icon };
+    weatherCacheTime = now;
+    return weatherCache;
+  } catch (err) {
+    console.error('fetchWeather failed:', err.message);
+    return { temp: null, description: 'N/A', icon: '🌡️' };
+  }
 }
 
 function weatherIcon(code) {
@@ -261,7 +271,8 @@ function weatherIcon(code) {
   if (code === 116) return '⛅';
   if ([119, 122].includes(code)) return '☁️';
   if ([143, 248, 260].includes(code)) return '🌫️';
-  if ([176, 263, 266, 281, 284, 293, 296, 299, 302, 305, 308, 311, 314, 317, 350, 353, 356, 359, 362, 365, 374, 377].includes(code)) return '🌧️';
+  if ([176, 263, 266, 281, 284, 293, 296, 299, 302, 305, 308, 311, 314, 317,
+       350, 353, 356, 359, 362, 365, 374, 377].includes(code)) return '🌧️';
   if ([179, 182, 185, 227, 230, 323, 326, 329, 332, 335, 338, 368, 371, 395].includes(code)) return '❄️';
   if ([200, 386, 389, 392].includes(code)) return '⛈️';
   return '🌡️';
@@ -284,19 +295,18 @@ function formatBytes(bytes) {
 // --- API ---
 app.get('/api/metrics', async (req, res) => {
   try {
-    const [cpuUsage, cpuTemp, disk, docker, systemd, qulvachcha, oshna, weather] = await Promise.all([
+    const [cpuUsage, cpuTemp, ram, disk, network, docker, systemd, qulvachcha, oshna, weather] = await Promise.all([
       getCpuUsage(),
       getCpuTemp(),
+      getRam(),
       getDisk(),
+      getNetworkSpeed(),
       getDockerContainers(),
       getSystemdServices(),
       getBotStatus(null),
       getBotStatus('personal'),
       fetchWeather()
     ]);
-
-    const ram = getRam();
-    const network = getNetworkSpeed();
 
     res.json({
       system: {
@@ -316,14 +326,24 @@ app.get('/api/metrics', async (req, res) => {
       timestamp: Date.now()
     });
   } catch (err) {
+    console.error('API /metrics error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`\n🫀 Pulse running on http://0.0.0.0:${PORT}\n`);
-  // Warm up bot cache in background (openclaw status takes ~8s)
+// --- Server + Graceful Shutdown ---
+const server = app.listen(CONFIG.port, '0.0.0.0', () => {
+  console.log(`\n🫀 Pulse running on http://0.0.0.0:${CONFIG.port}\n`);
   Promise.all([getBotStatus(null), getBotStatus('personal')])
     .then(() => console.log('Bot status cache warmed up'))
-    .catch(() => {});
+    .catch(err => console.error('Bot cache warmup failed:', err.message));
+});
+
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received, shutting down gracefully...');
+  server.close(() => process.exit(0));
+});
+
+process.on('SIGINT', () => {
+  server.close(() => process.exit(0));
 });

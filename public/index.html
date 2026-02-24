@@ -740,38 +740,48 @@
       el.classList.add('updated');
     }
 
+    // Build a service row safely (no innerHTML with user data)
+    function makeServiceRow(name, isOk, badge, uptime) {
+      const row = document.createElement('div');
+      row.className = 'service-row';
+
+      const left = document.createElement('div');
+      left.className = 'service-left';
+      const dot = document.createElement('div');
+      dot.className = 'status-dot ' + (isOk ? 'online' : 'offline');
+      const nameEl = document.createElement('div');
+      nameEl.className = 'service-name';
+      nameEl.textContent = name;
+      left.append(dot, nameEl);
+
+      const right = document.createElement('div');
+      right.style.cssText = 'display:flex;align-items:center;gap:10px';
+      const badgeEl = document.createElement('span');
+      badgeEl.className = 'service-badge ' + (isOk ? 'badge-green' : 'badge-red');
+      badgeEl.textContent = badge;
+      const uptimeEl = document.createElement('span');
+      uptimeEl.className = 'service-uptime';
+      uptimeEl.textContent = uptime || '';
+      right.append(badgeEl, uptimeEl);
+
+      row.append(left, right);
+      return row;
+    }
+
     // Render docker list
     function renderDocker(containers) {
       const list = document.getElementById('docker-list');
-      list.innerHTML = containers.map(c => `
-        <div class="service-row">
-          <div class="service-left">
-            <div class="status-dot ${c.running ? 'online' : 'offline'}"></div>
-            <div class="service-name">${c.name.replace('roast-', '')}</div>
-          </div>
-          <div style="display:flex;align-items:center;gap:10px">
-            <span class="service-badge ${c.running ? 'badge-green' : 'badge-red'}">${c.running ? 'running' : 'stopped'}</span>
-            <span class="service-uptime">${c.uptime || ''}</span>
-          </div>
-        </div>
-      `).join('');
+      list.replaceChildren(...containers.map(c =>
+        makeServiceRow(c.name.replace('roast-', ''), c.running, c.running ? 'running' : 'stopped', c.uptime)
+      ));
     }
 
     // Render systemd list
     function renderSystemd(services) {
       const list = document.getElementById('systemd-list');
-      list.innerHTML = services.map(s => `
-        <div class="service-row">
-          <div class="service-left">
-            <div class="status-dot ${s.active ? 'online' : 'offline'}"></div>
-            <div class="service-name">${s.name}</div>
-          </div>
-          <div style="display:flex;align-items:center;gap:10px">
-            <span class="service-badge ${s.active ? 'badge-green' : 'badge-red'}">${s.active ? 'active' : 'inactive'}</span>
-            <span class="service-uptime">${s.uptime || ''}</span>
-          </div>
-        </div>
-      `).join('');
+      list.replaceChildren(...services.map(s =>
+        makeServiceRow(s.name, s.active, s.active ? 'active' : 'inactive', s.uptime)
+      ));
     }
 
     // Render bot
