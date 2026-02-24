@@ -191,7 +191,7 @@ async function getBotStatus(profile) {
   try {
     const cmd = profile ? `openclaw --profile ${profile} status` : 'openclaw status';
     const out = await run(cmd, 15000);
-    const online = out.includes('state active') || out.includes('running');
+    const online = out.includes('reachable') && !out.includes('unreachable') && !out.includes('error');
     // Parse "default main active 4m ago" or "active just now"
     const lastMatch = out.match(/active\s+(just now|\d+[smhd]\s+ago|\d+\s+\w+\s+ago)/i);
     const lastActive = lastMatch ? lastMatch[1].trim() : 'unknown';
