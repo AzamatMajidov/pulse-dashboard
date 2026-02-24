@@ -172,14 +172,14 @@
     /* === GRID LAYOUTS === */
     .grid-4 {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 16px;
       margin-bottom: 28px;
     }
 
     .grid-2 {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 16px;
       margin-bottom: 28px;
     }
@@ -193,6 +193,7 @@
       transition: border-color 0.2s, box-shadow 0.2s;
       position: relative;
       overflow: hidden;
+      min-width: 0;
     }
 
     .card:hover {
@@ -271,6 +272,8 @@
       border-radius: var(--radius-sm);
       padding: 8px 10px;
       border: 1px solid var(--border);
+      min-width: 0;
+      overflow: hidden;
     }
 
     .net-item-label {
@@ -286,10 +289,12 @@
 
     .net-item-value {
       font-family: 'JetBrains Mono', monospace;
-      font-size: 14px;
+      font-size: 13px;
       font-weight: 500;
       color: var(--text);
       white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     /* === SERVICES CARD === */
@@ -508,12 +513,12 @@
       #clock { font-size: 36px; }
 
       .grid-4 {
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 12px;
       }
 
       .grid-2 {
-        grid-template-columns: 1fr;
+        grid-template-columns: minmax(0, 1fr);
         gap: 12px;
       }
 
@@ -523,8 +528,8 @@
     }
 
     @media (max-width: 480px) {
-      .grid-4 { grid-template-columns: 1fr 1fr; }
-      .grid-2 { grid-template-columns: 1fr; }
+      .grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .grid-2 { grid-template-columns: minmax(0, 1fr); }
       .bot-stats { grid-template-columns: 1fr 1fr 1fr; }
       .bot-stat-value { font-size: 11px; }
       .card-value { font-size: 22px; }
