@@ -54,7 +54,7 @@ Frontend polls `/api/metrics` every **10 seconds**
 ### Row 3 — Services
 | Widget | Details |
 |--------|---------|
-| Docker | `roast-postgres`, `mongo`, `redis` — name + status + uptime (via `docker ps -a`) |
+| Docker | `roast-postgres`, `mongo`, `roast-redis` — name + status + uptime (via `docker ps -a`) |
 | Systemd | `kuydirchi` — status + uptime (via `systemctl --user`) |
 
 ### Row 4 — Bots (2 cards)
@@ -135,13 +135,14 @@ Returns single JSON object:
 
 ---
 
-## Systemd Service (future)
-When ready to autostart on boot:
+## Systemd Service ✅ Done
+Service file: `~/.config/systemd/user/pulse.service`
 ```bash
-# Service file: ~/.config/systemd/user/pulse.service
-systemctl --user enable pulse
-systemctl --user start pulse
+systemctl --user status pulse     # check
+systemctl --user restart pulse    # restart
+journalctl --user -u pulse -f     # logs
 ```
+Enabled + running. Auto-starts on boot, auto-restarts on crash.
 
 ---
 
