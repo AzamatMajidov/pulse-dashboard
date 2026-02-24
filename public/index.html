@@ -261,40 +261,36 @@
 
     /* === NETWORK CARD === */
     .net-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
       margin-top: 12px;
     }
 
     .net-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
       background: var(--bg3);
       border-radius: var(--radius-sm);
-      padding: 8px 10px;
+      padding: 8px 12px;
       border: 1px solid var(--border);
       min-width: 0;
-      overflow: hidden;
     }
 
     .net-item-label {
-      font-size: 10px;
+      font-size: 11px;
       color: var(--text-muted);
       text-transform: uppercase;
       letter-spacing: 0.1em;
-      margin-bottom: 4px;
-      display: flex;
-      align-items: center;
-      gap: 4px;
+      flex-shrink: 0;
     }
 
     .net-item-value {
       font-family: 'JetBrains Mono', monospace;
-      font-size: 13px;
+      font-size: 14px;
       font-weight: 500;
       color: var(--text);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
     }
 
     /* === SERVICES CARD === */
@@ -604,11 +600,11 @@
         <div class="net-grid">
           <div class="net-item">
             <div class="net-item-label">↓ Down</div>
-            <div class="net-item-value" id="net-down">-- KB/s</div>
+            <div class="net-item-value" id="net-down">--</div>
           </div>
           <div class="net-item">
             <div class="net-item-label">↑ Up</div>
-            <div class="net-item-value" id="net-up">-- KB/s</div>
+            <div class="net-item-value" id="net-up">--</div>
           </div>
         </div>
       </div>
