@@ -478,6 +478,44 @@
       border: 1px solid var(--border);
       color: var(--text-muted);
     }
+
+    /* === RESPONSIVE === */
+    @media (max-width: 900px) {
+      body { padding: 12px; }
+
+      .hero {
+        grid-template-columns: 1fr;
+        text-align: center;
+        gap: 16px;
+        padding: 16px;
+      }
+      .hero-left { align-items: center; }
+      .hero-right { justify-content: center; }
+
+      #clock { font-size: 36px; }
+
+      .grid-4 {
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+      }
+
+      .grid-2 {
+        grid-template-columns: 1fr;
+        gap: 12px;
+      }
+
+      .card-value { font-size: 26px; }
+
+      .bot-stats { grid-template-columns: 1fr 1fr 1fr; }
+    }
+
+    @media (max-width: 480px) {
+      .grid-4 { grid-template-columns: 1fr 1fr; }
+      .grid-2 { grid-template-columns: 1fr; }
+      .bot-stats { grid-template-columns: 1fr 1fr; }
+      .card-value { font-size: 22px; }
+      #clock { font-size: 32px; }
+    }
   </style>
 </head>
 <body>
