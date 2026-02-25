@@ -300,40 +300,42 @@ function getBotStatus(name, profile) {
     return Promise.resolve({ name, ...cached.data });
   }
 
-  // Cache is stale but exists — return stale immediately, refresh in background
-  if (cached && !cached.refreshing) {
-    cached.refreshing = true;
+  // Stale or no cache — return immediately (stale data or empty), refresh in background
+  if (!cached || !cached.refreshing) {
+    if (cached) cached.refreshing = true;
+    else botCache[key] = { time: 0, data: { online: false, lastActive: '...', model: '...', uptime: '...' }, refreshing: true };
     fetchBotStatus(name, profile).catch(() => {});
-    return Promise.resolve({ name, ...cached.data });
   }
 
-  // No cache yet — must wait (only happens on first load)
-  return fetchBotStatus(name, profile).then(result =>
-    result || { name, online: false, lastActive: 'N/A', model: 'N/A', uptime: 'N/A' }
-  );
+  return Promise.resolve({ name, ...(cached ? cached.data : { online: false, lastActive: '...', model: '...', uptime: '...' }) });
 }
 
 // --- Weather ---
 let weatherCache = null;
 let weatherCacheTime = 0;
 
-function httpGet(url, redirects = 5) {
+function httpGet(url, redirects = 5, timeoutMs = 8000) {
   return new Promise((resolve, reject) => {
     const mod = url.startsWith('https') ? require('https') : http;
-    mod.get(url, { headers: { 'User-Agent': 'pulse-dashboard/1.0' } }, (res) => {
+    const req = mod.get(url, { headers: { 'User-Agent': 'pulse-dashboard/1.0' } }, (res) => {
       if ([301, 302, 307, 308].includes(res.statusCode) && res.headers.location && redirects > 0) {
-        return resolve(httpGet(res.headers.location, redirects - 1));
+        return resolve(httpGet(res.headers.location, redirects - 1, timeoutMs));
       }
       let data = '';
       res.on('data', chunk => data += chunk);
       res.on('end', () => resolve(data));
-    }).on('error', reject);
+    });
+    req.setTimeout(timeoutMs, () => { req.destroy(new Error('timeout')); });
+    req.on('error', reject);
   });
 }
 
 async function fetchWeather() {
   const now = Date.now();
-  if (weatherCache && now - weatherCacheTime < CONFIG.weatherCacheTtl) return weatherCache;
+  // Return cache if fresh (success) OR if recently failed (back off 2 min)
+  if (weatherCacheTime && now - weatherCacheTime < CONFIG.weatherCacheTtl) {
+    return weatherCache || { temp: null, description: 'N/A', icon: '🌡️' };
+  }
   try {
     const data = await httpGet(`https://wttr.in/${encodeURIComponent(CONFIG.weatherLocation)}?format=j1`);
     const json = JSON.parse(data);
@@ -342,12 +344,12 @@ async function fetchWeather() {
     const desc = current.weatherDesc[0].value;
     const icon = weatherIcon(parseInt(current.weatherCode));
     weatherCache = { temp, description: desc, icon };
-    weatherCacheTime = now;
-    return weatherCache;
   } catch (err) {
     console.error('fetchWeather failed:', err.message);
-    return { temp: null, description: 'N/A', icon: '🌡️' };
+    // Keep stale cache if available, else null
   }
+  weatherCacheTime = now;
+  return weatherCache || { temp: null, description: 'N/A', icon: '🌡️' };
 }
 
 function weatherIcon(code) {
