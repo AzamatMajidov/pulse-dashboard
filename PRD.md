@@ -173,12 +173,21 @@ Offline crypto signature — no backend dependency.
 | `container_down` | Docker container not running | `{ metric: "container_down", name: "roast-postgres" }` |
 | `bot_offline` | OpenClaw bot offline | `{ metric: "bot_offline", name: "My Bot" }` |
 
+**Telegram credential resolution (in priority order):**
+1. `config.json` → `alerts.telegram.botToken` / `chatId` (manual override)
+2. Auto-detect from OpenClaw config:
+   - Token: `~/.openclaw/openclaw.json` → `channels.telegram.botToken`
+   - Chat ID: `~/.openclaw/credentials/telegram-allowFrom.json` → `allowFrom[0]`
+
+For users with OpenClaw + Telegram configured: **zero alert setup required**.
+Alerts send directly via Telegram Bot API (HTTP) — does not depend on OpenClaw gateway being online.
+
 **Config:**
 ```json
 "alerts": {
   "telegram": {
-    "botToken": "YOUR_BOT_TOKEN",
-    "chatId": "YOUR_CHAT_ID"
+    "botToken": "",
+    "chatId": ""
   },
   "cooldownMinutes": 15,
   "rules": [
@@ -189,6 +198,8 @@ Offline crypto signature — no backend dependency.
   ]
 }
 ```
+
+> Leave `botToken` and `chatId` empty to auto-detect from OpenClaw config.
 
 **Alert message format:**
 ```
