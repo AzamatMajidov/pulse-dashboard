@@ -267,17 +267,21 @@ POST /api/action/restart-docker   { "name": "roast-postgres" }
 | Clear sessions | `openclaw sessions clear` (or delete session files) |
 
 **Model switch flow:**
-1. User selects model from dropdown (Opus / Sonnet / Custom)
-2. Pulse reads `~/.openclaw/openclaw.json`, updates `agents.defaults.model.primary`
-3. Restarts gateway: `openclaw gateway restart`
-4. Bot card updates to show new model on next refresh
+1. Bot card dropdown is populated dynamically from `GET /api/openclaw/models`
+2. Source: `~/.openclaw/openclaw.json` → `agents.defaults.models` (all configured models + aliases)
+3. User selects any model from the list — not hardcoded, reflects actual OpenClaw config
+4. `POST /api/openclaw/model` → Pulse edits `agents.defaults.model.primary` → restarts gateway
+5. Bot card refreshes on next poll showing new active model
 
 **API:**
 ```
-POST /api/openclaw/gateway     { "action": "restart|stop|start" }
-POST /api/openclaw/model       { "profile": null, "model": "anthropic/claude-opus-4-6" }
-POST /api/openclaw/clear-sessions { "profile": null }
+GET  /api/openclaw/models                 → { primary, models: [{ id, alias, active }] }
+POST /api/openclaw/gateway                { "action": "restart|stop|start" }
+POST /api/openclaw/model                  { "model": "anthropic/claude-opus-4-6" }
+POST /api/openclaw/clear-sessions         { "profile": null }
 ```
+
+**Note:** v1 changes global default (`agents.defaults.model.primary`). Per-profile model override is v2.
 
 **UI:** Action buttons on bot card: `⟳ Restart` · `⏹ Stop` · model dropdown. Confirmation required for destructive actions.
 
