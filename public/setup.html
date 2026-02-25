@@ -346,7 +346,7 @@
       max-height: 0;
       transition: max-height 0.3s ease;
     }
-    .collapsible-body.open { max-height: 600px; }
+    .collapsible-body.open { max-height: 2000px; }
     .collapsible-divider { margin-top: 20px; border-top: 1px solid var(--border); padding-top: 20px; }
 
     /* Password field */
@@ -370,6 +370,84 @@
 
     /* Auth fields */
     .auth-fields { margin-top: 16px; }
+
+    /* Alert telegram row */
+    .tg-detected {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      background: #22d3ee10;
+      border: 1px solid var(--border-hover);
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      color: var(--cyan);
+    }
+    .tg-detected .tg-override {
+      margin-left: auto;
+      font-size: 12px;
+      color: var(--text-muted);
+      cursor: pointer;
+      text-decoration: underline;
+    }
+    .tg-detected .tg-override:hover { color: var(--text); }
+
+    /* Alert rules */
+    .rule-row {
+      display: grid;
+      grid-template-columns: 150px 80px 80px 1fr 32px;
+      gap: 6px;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .rule-row select, .rule-row input {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
+      font-size: 13px;
+      padding: 8px 10px;
+      outline: none;
+      width: 100%;
+      transition: border-color 0.2s;
+    }
+    .rule-row select:focus, .rule-row input:focus { border-color: var(--cyan); }
+    .rule-row select option { background: var(--bg3); }
+    .btn-remove-rule {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 6px 8px;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+    .btn-remove-rule:hover { border-color: var(--red); color: var(--red); }
+    .rule-col-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+
+    /* Test button */
+    .btn-test {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text-dim);
+      cursor: pointer;
+      font-family: 'Inter', sans-serif;
+      font-size: 12px;
+      padding: 8px 14px;
+      transition: all 0.2s;
+      margin-top: 12px;
+    }
+    .btn-test:hover { border-color: var(--cyan); color: var(--cyan); }
+    .test-result { font-size: 12px; margin-top: 6px; }
+    .test-result.ok { color: var(--green); }
+    .test-result.err { color: var(--red); }
 
     /* Save button */
     .save-wrap {
@@ -569,6 +647,62 @@
     </div>
   </div>
 
+  <!-- Alerts (collapsible) -->
+  <div class="card">
+    <div class="collapsible-header" onclick="toggleAlerts()">
+      <div class="card-title" style="margin-bottom:0">Alerts <span style="color:var(--text-muted);font-weight:400;font-size:11px;text-transform:none;letter-spacing:0">(optional)</span></div>
+      <div class="collapsible-arrow" id="alerts-arrow">▶</div>
+    </div>
+    <div class="collapsible-body" id="alerts-body">
+      <div class="collapsible-divider">
+
+        <!-- Telegram row -->
+        <div class="field">
+          <label>Telegram</label>
+          <div id="tg-auto-row" class="tg-detected" style="display:none">
+            ✅ Auto-detected from OpenClaw
+            <span class="tg-override" onclick="showTgManual()">Override</span>
+          </div>
+          <div id="tg-manual-row" style="display:none">
+            <div class="field">
+              <label for="tg-token">Bot Token</label>
+              <input type="text" id="tg-token" placeholder="1234567890:ABCDef..." autocomplete="off" />
+            </div>
+            <div class="field">
+              <label for="tg-chat">Chat ID</label>
+              <input type="text" id="tg-chat" placeholder="45118778" autocomplete="off" />
+            </div>
+          </div>
+          <div id="tg-loading-row" style="font-size:13px;color:var(--text-muted)">Checking...</div>
+          <button class="btn-test" onclick="testAlert()">🔔 Send test alert</button>
+          <div class="test-result" id="test-result"></div>
+        </div>
+
+        <!-- Cooldown -->
+        <div class="field">
+          <label for="alert-cooldown">Cooldown between alerts (minutes)</label>
+          <input type="number" id="alert-cooldown" value="15" min="1" max="1440" style="max-width:120px" />
+        </div>
+
+        <!-- Rules -->
+        <div class="field">
+          <label>Alert Rules</label>
+          <div style="display:grid;grid-template-columns:150px 80px 80px 1fr 32px;gap:6px;margin-bottom:6px">
+            <div class="rule-col-label">Metric</div>
+            <div class="rule-col-label">Threshold</div>
+            <div class="rule-col-label">Duration</div>
+            <div class="rule-col-label">Name</div>
+            <div></div>
+          </div>
+          <div id="alert-rules"></div>
+          <button class="btn-add" onclick="addAlertRule()" style="margin-top:6px">+ Add rule</button>
+          <div class="hint" style="margin-top:8px">Duration: seconds the metric must stay above threshold before firing. Leave 0 for immediate.</div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
   <!-- Bots (collapsible) -->
   <div class="card">
     <div class="collapsible-header" onclick="toggleBots()">
@@ -640,6 +774,21 @@
       toggleAuth();
       if (cfg.auth.username) document.getElementById('auth-user').value = cfg.auth.username;
       if (cfg.auth.password) document.getElementById('auth-pass').value = cfg.auth.password;
+    }
+
+    // Alerts
+    if (cfg.alerts) {
+      if (cfg.alerts.cooldownMinutes) document.getElementById('alert-cooldown').value = cfg.alerts.cooldownMinutes;
+      if (cfg.alerts.telegram?.botToken) document.getElementById('tg-token').value = cfg.alerts.telegram.botToken;
+      if (cfg.alerts.telegram?.chatId) document.getElementById('tg-chat').value = cfg.alerts.telegram.chatId;
+      if (Array.isArray(cfg.alerts.rules) && cfg.alerts.rules.length > 0) {
+        const body = document.getElementById('alerts-body');
+        const arrow = document.getElementById('alerts-arrow');
+        body.classList.add('open');
+        arrow.textContent = '▼';
+        checkTelegramAuto();
+        cfg.alerts.rules.forEach(r => addAlertRule(r.metric, r.threshold, r.duration, r.name));
+      }
     }
 
     // Bots
@@ -809,6 +958,148 @@
     })).filter(b => b.name);
   }
 
+  // --- Alerts ---
+  function toggleAlerts() {
+    const body = document.getElementById('alerts-body');
+    const arrow = document.getElementById('alerts-arrow');
+    const open = body.classList.toggle('open');
+    arrow.textContent = open ? '▼' : '▶';
+    if (open) checkTelegramAuto();
+  }
+
+  async function checkTelegramAuto() {
+    const loading = document.getElementById('tg-loading-row');
+    const autoRow = document.getElementById('tg-auto-row');
+    const manualRow = document.getElementById('tg-manual-row');
+    loading.style.display = 'block';
+    try {
+      const res = await fetch('/api/alerts/status');
+      const data = await res.json();
+      loading.style.display = 'none';
+      if (data.telegram?.configured && data.telegram?.source === 'openclaw') {
+        autoRow.style.display = 'flex';
+        manualRow.style.display = 'none';
+      } else {
+        autoRow.style.display = 'none';
+        manualRow.style.display = 'block';
+      }
+    } catch {
+      loading.style.display = 'none';
+      manualRow.style.display = 'block';
+    }
+  }
+
+  function showTgManual() {
+    document.getElementById('tg-auto-row').style.display = 'none';
+    document.getElementById('tg-manual-row').style.display = 'block';
+  }
+
+  async function testAlert() {
+    const resultEl = document.getElementById('test-result');
+    resultEl.textContent = 'Sending...';
+    resultEl.className = 'test-result';
+    try {
+      const res = await fetch('/api/alerts/test', { method: 'POST' });
+      const data = await res.json();
+      if (data.ok) {
+        resultEl.textContent = `✅ Sent! Check your Telegram (via ${data.source})`;
+        resultEl.className = 'test-result ok';
+      } else {
+        resultEl.textContent = `❌ ${data.error}`;
+        resultEl.className = 'test-result err';
+      }
+    } catch (e) {
+      resultEl.textContent = `❌ Network error`;
+      resultEl.className = 'test-result err';
+    }
+  }
+
+  const METRIC_OPTIONS = [
+    { value: 'cpu', label: 'CPU usage', hasThreshold: true, hasName: false },
+    { value: 'ram', label: 'RAM usage', hasThreshold: true, hasName: false },
+    { value: 'disk', label: 'Disk usage', hasThreshold: true, hasName: false },
+    { value: 'service_down', label: 'Service down', hasThreshold: false, hasName: true },
+    { value: 'container_down', label: 'Container down', hasThreshold: false, hasName: true },
+    { value: 'bot_offline', label: 'Bot offline', hasThreshold: false, hasName: true },
+  ];
+
+  function addAlertRule(metric = 'cpu', threshold = 90, duration = 60, name = '') {
+    const container = document.getElementById('alert-rules');
+    const row = document.createElement('div');
+    row.className = 'rule-row';
+
+    // Metric select
+    const sel = document.createElement('select');
+    METRIC_OPTIONS.forEach(opt => {
+      const o = document.createElement('option');
+      o.value = opt.value;
+      o.textContent = opt.label;
+      if (opt.value === metric) o.selected = true;
+      sel.appendChild(o);
+    });
+    sel.onchange = () => updateRuleRow(row, sel.value);
+
+    // Threshold input
+    const threshEl = document.createElement('input');
+    threshEl.type = 'number';
+    threshEl.placeholder = '%';
+    threshEl.min = 1; threshEl.max = 100;
+    threshEl.value = threshold;
+
+    // Duration input
+    const durEl = document.createElement('input');
+    durEl.type = 'number';
+    durEl.placeholder = 'sec';
+    durEl.min = 0;
+    durEl.value = duration;
+
+    // Name input
+    const nameEl = document.createElement('input');
+    nameEl.type = 'text';
+    nameEl.placeholder = 'service/bot name';
+    nameEl.value = name;
+
+    // Remove btn
+    const rmBtn = document.createElement('button');
+    rmBtn.className = 'btn-remove-rule';
+    rmBtn.textContent = '×';
+    rmBtn.onclick = () => row.remove();
+
+    row.appendChild(sel);
+    row.appendChild(threshEl);
+    row.appendChild(durEl);
+    row.appendChild(nameEl);
+    row.appendChild(rmBtn);
+    container.appendChild(row);
+    updateRuleRow(row, metric);
+  }
+
+  function updateRuleRow(row, metric) {
+    const opt = METRIC_OPTIONS.find(o => o.value === metric);
+    const cells = row.querySelectorAll('input');
+    const threshEl = cells[0]; // threshold
+    const durEl = cells[1];    // duration
+    const nameEl = cells[2];   // name
+    threshEl.style.visibility = opt?.hasThreshold ? 'visible' : 'hidden';
+    durEl.style.visibility = opt?.hasThreshold ? 'visible' : 'hidden';
+    nameEl.style.visibility = opt?.hasName ? 'visible' : 'hidden';
+  }
+
+  function getAlertRules() {
+    return [...document.querySelectorAll('#alert-rules .rule-row')].map(row => {
+      const sel = row.querySelector('select').value;
+      const inputs = row.querySelectorAll('input');
+      const opt = METRIC_OPTIONS.find(o => o.value === sel);
+      const rule = { metric: sel };
+      if (opt?.hasThreshold) {
+        rule.threshold = parseInt(inputs[0].value) || 90;
+        rule.duration = parseInt(inputs[1].value) || 0;
+      }
+      if (opt?.hasName) rule.name = inputs[2].value.trim();
+      return rule;
+    }).filter(r => r.metric);
+  }
+
   // --- Save ---
   async function save() {
     const btn = document.getElementById('save-btn');
@@ -839,6 +1130,9 @@
       }
     }
 
+    const tgToken = document.getElementById('tg-token').value.trim();
+    const tgChat = document.getElementById('tg-chat').value.trim();
+
     const cfg = {
       label: document.getElementById('label').value.trim() || undefined,
       port,
@@ -850,6 +1144,11 @@
         enabled: authEnabled,
         username: document.getElementById('auth-user').value.trim(),
         password: document.getElementById('auth-pass').value
+      },
+      alerts: {
+        telegram: { botToken: tgToken, chatId: tgChat },
+        cooldownMinutes: parseInt(document.getElementById('alert-cooldown').value) || 15,
+        rules: getAlertRules()
       },
       bots: getBots()
     };

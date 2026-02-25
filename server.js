@@ -2,7 +2,9 @@ const express = require('express');
 const { exec } = require('child_process');
 const fs = require('fs');
 const http = require('http');
+const https = require('https');
 const path = require('path');
+const os = require('os');
 
 // --- Setup Mode ---
 let setupMode = false;
@@ -45,12 +47,183 @@ async function detectNetworkIface() {
 
 let CONFIG = {};
 
+// ============================================================
+// Alert System
+// ============================================================
+
+let lastMetricSnapshot = null;
+let alertHistory = [];          // ring buffer, max 20
+const alertState = new Map();   // key = rule index, value = { status, firedAt, resolvedAt, accumulator }
+
+// T01 — Auto-detect Telegram credentials
+async function getTelegramCredentials() {
+  // Manual override in config
+  const manual = CONFIG.alerts?.telegram;
+  if (manual?.botToken && manual?.chatId) {
+    return { botToken: manual.botToken, chatId: manual.chatId, source: 'manual' };
+  }
+  // Auto-detect from OpenClaw
+  try {
+    const ocPath = path.join(os.homedir(), '.openclaw', 'openclaw.json');
+    const afPath = path.join(os.homedir(), '.openclaw', 'credentials', 'telegram-allowFrom.json');
+    const [ocRaw, afRaw] = await Promise.all([
+      fs.promises.readFile(ocPath, 'utf8'),
+      fs.promises.readFile(afPath, 'utf8')
+    ]);
+    const oc = JSON.parse(ocRaw);
+    const af = JSON.parse(afRaw);
+    const botToken = oc?.channels?.telegram?.botToken;
+    const chatId = af?.allowFrom?.[0];
+    if (botToken && chatId) return { botToken, chatId, source: 'openclaw' };
+  } catch {}
+  return null;
+}
+
+// T02 — Send Telegram message
+async function sendTelegramMessage(text) {
+  try {
+    const creds = await getTelegramCredentials();
+    if (!creds) { console.error('sendTelegramMessage: no credentials'); return false; }
+    const body = JSON.stringify({ chat_id: creds.chatId, text, parse_mode: 'HTML' });
+    await new Promise((resolve, reject) => {
+      const req = https.request({
+        hostname: 'api.telegram.org',
+        path: `/bot${creds.botToken}/sendMessage`,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }
+      }, (res) => {
+        res.resume();
+        resolve(res.statusCode);
+      });
+      req.setTimeout(8000, () => req.destroy(new Error('timeout')));
+      req.on('error', reject);
+      req.write(body);
+      req.end();
+    });
+    return true;
+  } catch (err) {
+    console.error('sendTelegramMessage failed:', err.message);
+    return false;
+  }
+}
+
+// T05 — Evaluate a single rule against snapshot
+function evaluateRule(rule, snapshot) {
+  if (!snapshot) return false;
+  switch (rule.metric) {
+    case 'cpu':    return (snapshot.cpu ?? 0) >= rule.threshold;
+    case 'ram':    return (snapshot.ram ?? 0) >= rule.threshold;
+    case 'disk':   return (snapshot.disk ?? 0) >= rule.threshold;
+    case 'service_down':
+      return (snapshot.services || []).some(s => s.name === rule.name && !s.active);
+    case 'container_down':
+      return (snapshot.docker || []).some(c => c.name === rule.name && !c.running);
+    case 'bot_offline':
+      return (snapshot.bots || []).some(b => b.name === rule.name && !b.online);
+    default: return false;
+  }
+}
+
+function ruleLabel(rule) {
+  switch (rule.metric) {
+    case 'cpu':    return `CPU above ${rule.threshold}%`;
+    case 'ram':    return `RAM above ${rule.threshold}%`;
+    case 'disk':   return `Disk above ${rule.threshold}%`;
+    case 'service_down':    return `Service <b>${rule.name}</b> is down`;
+    case 'container_down':  return `Container <b>${rule.name}</b> is down`;
+    case 'bot_offline':     return `Bot <b>${rule.name}</b> is offline`;
+    default: return rule.metric;
+  }
+}
+
+function ruleValue(rule, snapshot) {
+  switch (rule.metric) {
+    case 'cpu':   return `currently ${snapshot?.cpu ?? '?'}%`;
+    case 'ram':   return `currently ${snapshot?.ram ?? '?'}%`;
+    case 'disk':  return `currently ${snapshot?.disk ?? '?'}%`;
+    default: return '';
+  }
+}
+
+// T03/T06 — Background alert worker
+function startAlertWorker() {
+  const INTERVAL = 30 * 1000;
+  const STEP_SECONDS = 30;
+
+  setInterval(async () => {
+    const rules = CONFIG.alerts?.rules;
+    if (!rules?.length || !lastMetricSnapshot) return;
+
+    const cooldownMs = (CONFIG.alerts?.cooldownMinutes ?? 15) * 60 * 1000;
+    const serverLabel = CONFIG.label || 'Server';
+    const now = Date.now();
+    const timeStr = new Date().toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+
+    for (let i = 0; i < rules.length; i++) {
+      const rule = rules[i];
+      if (!alertState.has(i)) alertState.set(i, { status: 'idle', firedAt: null, resolvedAt: null, accumulator: 0 });
+      const state = alertState.get(i);
+      const triggered = evaluateRule(rule, lastMetricSnapshot);
+
+      // Duration accumulator for threshold rules
+      if (['cpu', 'ram', 'disk'].includes(rule.metric) && rule.duration) {
+        state.accumulator = triggered ? state.accumulator + STEP_SECONDS : 0;
+        const shouldFire = state.accumulator >= (rule.duration || 0);
+        if (!shouldFire && state.status === 'idle') continue;
+        if (!shouldFire && state.status === 'firing') {
+          // Resolved
+          state.status = 'resolved';
+          state.resolvedAt = now;
+          const entry = alertHistory.find(e => e.ruleIndex === i && e.active);
+          if (entry) { entry.active = false; entry.resolvedAt = now; }
+          const val = ruleValue(rule, lastMetricSnapshot);
+          sendTelegramMessage(`✅ <b>Pulse Recovered</b> — ${serverLabel}\n${ruleLabel(rule).replace('above', 'back to normal')} ${val}\n${timeStr}`).catch(() => {});
+          continue;
+        }
+        if (shouldFire && state.status !== 'firing') {
+          if (state.firedAt && now - state.firedAt < cooldownMs) continue;
+          state.status = 'firing';
+          state.firedAt = now;
+          const val = ruleValue(rule, lastMetricSnapshot);
+          const msg = `🔴 <b>Pulse Alert</b> — ${serverLabel}\n${ruleLabel(rule)} ${val}\n${timeStr}`;
+          pushHistory({ ruleIndex: i, metric: rule.metric, message: msg, firedAt: now });
+          sendTelegramMessage(msg).catch(() => {});
+        }
+      } else {
+        // Binary rules (service_down, container_down, bot_offline)
+        if (triggered && state.status !== 'firing') {
+          if (state.firedAt && now - state.firedAt < cooldownMs) continue;
+          state.status = 'firing';
+          state.firedAt = now;
+          const msg = `🔴 <b>Pulse Alert</b> — ${serverLabel}\n${ruleLabel(rule)}\n${timeStr}`;
+          pushHistory({ ruleIndex: i, metric: rule.metric, message: msg, firedAt: now });
+          sendTelegramMessage(msg).catch(() => {});
+        } else if (!triggered && state.status === 'firing') {
+          state.status = 'resolved';
+          state.resolvedAt = now;
+          const entry = alertHistory.find(e => e.ruleIndex === i && e.active);
+          if (entry) { entry.active = false; entry.resolvedAt = now; }
+          sendTelegramMessage(`✅ <b>Pulse Recovered</b> — ${serverLabel}\n${ruleLabel(rule)} resolved\n${timeStr}`).catch(() => {});
+        }
+      }
+    }
+  }, INTERVAL);
+
+  console.log('🔔 Alert worker started');
+}
+
+// T07 — Push to alert history (ring buffer, max 20)
+function pushHistory(entry) {
+  alertHistory.unshift({ ...entry, active: true, resolvedAt: null });
+  if (alertHistory.length > 20) alertHistory = alertHistory.slice(0, 20);
+}
+
 const app = express();
 app.use(express.json());
 
 // --- Auth Middleware (skips /setup, /api/setup, /api/health, /api/detect/*) ---
 app.use((req, res, next) => {
-  const publicPaths = ['/setup', '/api/setup', '/api/health'];
+  const publicPaths = ['/setup', '/api/setup', '/api/health', '/api/alerts/test'];
   const isPublic = publicPaths.includes(req.path) || req.path.startsWith('/api/detect');
   if (isPublic) return next();
   if (!CONFIG.auth || !CONFIG.auth.enabled) return next();
@@ -461,7 +634,7 @@ app.get('/api/metrics', async (req, res) => {
       getNetworkSpeed(), getDockerContainers(), getSystemdServices(),
       fetchWeather(), ...botPromises
     ]);
-    res.json({
+    const result = {
       system: {
         cpu: { usage: cpuUsage, temp: cpuTemp },
         ram, disk,
@@ -475,11 +648,45 @@ app.get('/api/metrics', async (req, res) => {
       bots: botResults,
       weather,
       timestamp: Date.now()
-    });
+    };
+
+    // Update snapshot for alert worker (T04)
+    lastMetricSnapshot = {
+      cpu: cpuUsage,
+      ram: ram?.percent,
+      disk: disk?.percent,
+      services: systemd,
+      docker,
+      bots: botResults
+    };
+
+    res.json(result);
   } catch (err) {
     console.error('API /metrics error:', err.message);
     res.status(500).json({ error: err.message });
   }
+});
+
+// --- T08: Alert status ---
+app.get('/api/alerts/status', async (req, res) => {
+  const creds = await getTelegramCredentials();
+  const active = alertHistory.filter(e => e.active);
+  res.json({
+    active,
+    history: alertHistory.slice(0, 20),
+    telegram: {
+      configured: !!creds,
+      source: creds?.source || 'none'
+    }
+  });
+});
+
+// --- T09: Test alert ---
+app.post('/api/alerts/test', async (req, res) => {
+  const creds = await getTelegramCredentials();
+  if (!creds) return res.json({ ok: false, error: 'No Telegram credentials found. Configure in settings or set up OpenClaw Telegram.' });
+  const ok = await sendTelegramMessage(`🔔 <b>Pulse Test Alert</b>\nAlerts are working! Your dashboard is configured correctly.\n${new Date().toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`);
+  res.json({ ok, source: creds.source });
 });
 
 // --- Setup + Settings page ---
@@ -512,6 +719,7 @@ async function start() {
           .then(() => console.log('Bot status cache warmed up'))
           .catch(err => console.error('Bot cache warmup failed:', err.message));
       }
+      startAlertWorker();
     }
   });
 
