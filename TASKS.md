@@ -1,7 +1,7 @@
 # Pulse — Task Breakdown
 
-**Last updated:** 2026-02-25  
-**Total tasks:** 57
+**Last updated:** 2026-02-26  
+**Total tasks:** 76 (37 done · 39 todo)
 
 Legend: `[ ]` todo · `[~]` in progress · `[x]` done
 
@@ -10,30 +10,30 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done
 ## Phase 1 — Telegram Alerts (F05)
 
 ### Backend
-- [ ] T01 Auto-detect Telegram credentials — read `botToken` from `~/.openclaw/openclaw.json`, `chatId` from `~/.openclaw/credentials/telegram-allowFrom.json`
-- [ ] T02 `sendTelegramMessage(text)` — plain HTTP POST to Bot API, no deps, with error handling
-- [ ] T03 Alert state manager — tracks per-rule state: `idle | firing | resolved`, last fired time, cooldown
-- [ ] T04 Metric snapshot — lightweight function that returns latest values (cpu%, ram%, disk%, service states, docker states, bot states) without full metrics API overhead
-- [ ] T05 Rules evaluator — per rule type: `cpu/ram/disk` (threshold + duration accumulator), `service_down`, `container_down`, `bot_offline`
-- [ ] T06 Background alert worker — runs every 30s, evaluates all rules, fires/resolves alerts, respects cooldown
-- [ ] T07 Alert history — in-memory ring buffer, last 20 alerts `{ rule, message, firedAt, resolvedAt }`
-- [ ] T08 `GET /api/alerts/status` — returns `{ active: [], history: [] }`
+- [x] T01 Auto-detect Telegram credentials — read `botToken` from `~/.openclaw/openclaw.json`, `chatId` from `~/.openclaw/credentials/telegram-allowFrom.json`
+- [x] T02 `sendTelegramMessage(text)` — plain HTTP POST to Bot API, no deps, with error handling
+- [x] T03 Alert state manager — tracks per-rule state: `idle | firing | resolved`, last fired time, cooldown
+- [x] T04 Metric snapshot — lightweight function that returns latest values (cpu%, ram%, disk%, service states, docker states, bot states) without full metrics API overhead
+- [x] T05 Rules evaluator — per rule type: `cpu/ram/disk` (threshold + duration accumulator), `service_down`, `container_down`, `bot_offline`
+- [x] T06 Background alert worker — runs every 30s, evaluates all rules, fires/resolves alerts, respects cooldown
+- [x] T07 Alert history — in-memory ring buffer, last 20 alerts `{ rule, message, firedAt, resolvedAt }`
+- [x] T08 `GET /api/alerts/status` — returns `{ active: [], history: [] }`
 
 ### Frontend — Settings (`/settings`)
-- [ ] T09 Add collapsible "Alerts" section to `setup.html` — between Security and Bots
-- [ ] T10 Telegram credentials row — shows auto-detected values with "Auto-detected from OpenClaw" badge; override toggle to enter manually
-- [ ] T11 "Send test alert" button — POST to `/api/alerts/test`, shows success/fail inline
-- [ ] T12 Cooldown input — minutes field, default 15
-- [ ] T13 Rule builder — table of rules, each row: `[metric ▼] [threshold] [duration] [name field] [× remove]`
-- [ ] T14 Metric dropdown options: `CPU` `RAM` `Disk` `Service down` `Container down` `Bot offline`
-- [ ] T15 "Add rule" button — appends new empty rule row
-- [ ] T16 Wire alerts config into existing save flow (`POST /api/setup`)
+- [x] T09 Add collapsible "Alerts" section to `setup.html` — between Security and Bots
+- [x] T10 Telegram credentials row — shows auto-detected values with "Auto-detected from OpenClaw" badge; override toggle to enter manually
+- [x] T11 "Send test alert" button — POST to `/api/alerts/test`, shows success/fail inline
+- [x] T12 Cooldown input — minutes field, default 15
+- [x] T13 Rule builder — table of rules, each row: `[metric ▼] [threshold] [duration] [name field] [× remove]`
+- [x] T14 Metric dropdown options: `CPU` `RAM` `Disk` `Service down` `Container down` `Bot offline`
+- [x] T15 "Add rule" button — appends new empty rule row
+- [x] T16 Wire alerts config into existing save flow (`POST /api/setup`)
 
 ### Frontend — Dashboard (`index.html`)
-- [ ] T17 Bell icon `🔔` in hero bar — right side, next to ⚙ gear icon
-- [ ] T18 Badge — red counter, shows count of currently active alerts, hidden when 0
-- [ ] T19 Alert dropdown — click bell → shows last 5 alerts with timestamp, metric, status (active 🔴 / resolved ✅)
-- [ ] T20 `GET /api/alerts/status` poll — refresh every 30s to update badge count
+- [x] T17 Bell icon `🔔` in hero bar — right side, next to ⚙ gear icon
+- [x] T18 Badge — red counter, shows count of currently active alerts, hidden when 0
+- [x] T19 Alert dropdown — click bell → shows last 5 alerts with timestamp, metric, status (active 🔴 / resolved ✅)
+- [x] T20 `GET /api/alerts/status` poll — refresh every 30s to update badge count
 
 ---
 
