@@ -1114,10 +1114,6 @@
         actionBar.className = 'bot-action-bar';
 
         // T34 — Model dropdown
-        const modelLabel = document.createElement('span');
-        modelLabel.className = 'bot-action-label';
-        modelLabel.textContent = 'Model (global)';
-
         const modelSelect = document.createElement('select');
         modelSelect.title = 'Switch model (applies to all bots)';
         if (_openclawModels.models.length === 0) {
@@ -1250,7 +1246,7 @@
           hideOverlay();
         }
 
-        actionBar.append(modelLabel, modelSelect, restartBtn, stopBtn, confirmHolder);
+        actionBar.append(modelSelect, restartBtn, stopBtn, confirmHolder);
         card.append(header, stats, actionBar);
         return card;
       }));
