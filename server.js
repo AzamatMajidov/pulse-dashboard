@@ -4,20 +4,26 @@ const fs = require('fs');
 const http = require('http');
 const path = require('path');
 
+// --- Setup Mode ---
+let setupMode = false;
+
 // --- Load Config ---
 async function loadConfig() {
   const configPath = path.join(__dirname, 'config.json');
   const examplePath = path.join(__dirname, 'config.example.json');
   try {
     const raw = await fs.promises.readFile(configPath, 'utf8');
+    setupMode = false;
     return JSON.parse(raw);
   } catch {
+    setupMode = true;
+    console.log('⚙️  No config.json found — running in setup mode');
     try {
       const raw = await fs.promises.readFile(examplePath, 'utf8');
-      console.log('⚠️  config.json not found, using config.example.json');
       return JSON.parse(raw);
     } catch {
-      throw new Error('No config.json or config.example.json found. Run setup.sh first.');
+      // Absolute fallback
+      return { port: 6682, bots: [], systemdServices: [], dockerContainers: 'auto', weatherLocation: 'London', networkIface: 'auto', auth: { enabled: false } };
     }
   }
 }
@@ -40,9 +46,13 @@ async function detectNetworkIface() {
 let CONFIG = {};
 
 const app = express();
+app.use(express.json());
 
-// --- Basic Auth Middleware ---
+// --- Auth Middleware (skips /setup, /api/setup, /api/health, /api/detect/*) ---
 app.use((req, res, next) => {
+  const publicPaths = ['/setup', '/api/setup', '/api/health'];
+  const isPublic = publicPaths.includes(req.path) || req.path.startsWith('/api/detect');
+  if (isPublic) return next();
   if (!CONFIG.auth || !CONFIG.auth.enabled) return next();
   const header = req.headers.authorization || '';
   const b64 = header.startsWith('Basic ') ? header.slice(6) : '';
@@ -53,6 +63,18 @@ app.use((req, res, next) => {
   if (user === CONFIG.auth.username && pass === CONFIG.auth.password) return next();
   res.set('WWW-Authenticate', 'Basic realm="Pulse"');
   res.status(401).send('Unauthorized');
+});
+
+// --- Setup Mode Redirect Middleware ---
+app.use((req, res, next) => {
+  if (!setupMode) return next();
+  const allowed = ['/setup', '/api/setup', '/api/health'];
+  const isAllowed = allowed.includes(req.path) || req.path.startsWith('/api/detect');
+  if (isAllowed) return next();
+  // Allow static assets for setup page
+  if (req.path.match(/\.(js|css|ico|png|svg|woff|woff2)$/)) return next();
+  if (req.path !== '/') return res.redirect('/setup');
+  res.redirect('/setup');
 });
 
 // Serve static files
@@ -193,35 +215,24 @@ async function getDockerContainers() {
   try {
     const out = await run('docker ps -a --format "{{.Names}}|{{.Status}}"');
     const lines = out.split('\n').filter(Boolean);
-
-    // Auto-discover: return all running containers
     if (CONFIG.dockerContainers === 'auto') {
       return lines.map(line => {
         const [name, ...rest] = line.split('|');
         const statusFull = rest.join('|');
         const running = statusFull.toLowerCase().startsWith('up');
-        const uptime = running
-          ? statusFull.replace(/^Up\s+/i, '')
-          : 'stopped';
-        return { name, running, uptime };
+        return { name, running, uptime: running ? statusFull.replace(/^Up\s+/i, '') : 'stopped' };
       });
     }
-
-    // Specific list: filter by configured names
     return CONFIG.dockerContainers.map(name => {
       const line = lines.find(l => l.startsWith(name + '|'));
       if (!line) return { name, running: false, uptime: '' };
       const [, statusFull] = line.split('|');
       const running = statusFull.toLowerCase().startsWith('up');
-      const uptime = running
-        ? statusFull.replace(/^Up\s+/i, '')
-        : 'stopped';
-      return { name, running, uptime };
+      return { name, running, uptime: running ? statusFull.replace(/^Up\s+/i, '') : 'stopped' };
     });
   } catch (err) {
     console.error('getDockerContainers failed:', err.message);
-    const names = CONFIG.dockerContainers === 'auto' ? [] : CONFIG.dockerContainers;
-    return names.map(name => ({ name, running: false, uptime: 'N/A' }));
+    return [];
   }
 }
 
@@ -248,7 +259,7 @@ async function getSystemdServices() {
   return results;
 }
 
-// --- Bot Status (cached, openclaw takes ~8s) ---
+// --- Bot Status ---
 const botCache = {};
 
 async function getBotStatus(name, profile) {
@@ -282,7 +293,7 @@ async function getBotStatus(name, profile) {
   }
 }
 
-// --- Weather (cached) ---
+// --- Weather ---
 let weatherCache = null;
 let weatherCacheTime = 0;
 
@@ -302,9 +313,7 @@ function httpGet(url, redirects = 5) {
 
 async function fetchWeather() {
   const now = Date.now();
-  if (weatherCache && now - weatherCacheTime < CONFIG.weatherCacheTtl) {
-    return weatherCache;
-  }
+  if (weatherCache && now - weatherCacheTime < CONFIG.weatherCacheTtl) return weatherCache;
   try {
     const data = await httpGet(`https://wttr.in/${encodeURIComponent(CONFIG.weatherLocation)}?format=j1`);
     const json = JSON.parse(data);
@@ -347,30 +356,95 @@ function formatBytes(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB/s`;
 }
 
-// --- API ---
+// ============================================================
+// API Routes
+// ============================================================
+
+// --- Health check ---
+app.get('/api/health', (req, res) => res.json({ ok: true }));
+
+// --- Current config (for settings form pre-fill) ---
+app.get('/api/config', (req, res) => res.json(CONFIG));
+
+// --- Save config + restart ---
+app.post('/api/setup', async (req, res) => {
+  try {
+    const cfg = req.body;
+
+    // Basic validation
+    if (!cfg.port || isNaN(parseInt(cfg.port))) return res.status(400).json({ error: 'Invalid port' });
+    if (!cfg.weatherLocation) return res.status(400).json({ error: 'Weather location required' });
+
+    // Normalize types
+    cfg.port = parseInt(cfg.port);
+    if (Array.isArray(cfg.dockerContainers) && cfg.dockerContainers.length === 0) {
+      cfg.dockerContainers = 'auto';
+    }
+    if (!Array.isArray(cfg.systemdServices)) cfg.systemdServices = [];
+    if (!Array.isArray(cfg.bots)) cfg.bots = [];
+
+    const configPath = path.join(__dirname, 'config.json');
+    await fs.promises.writeFile(configPath, JSON.stringify(cfg, null, 2));
+
+    res.json({ ok: true, port: cfg.port });
+
+    // Restart after response is sent
+    setTimeout(() => {
+      console.log('Config saved — restarting...');
+      process.exit(0);
+    }, 300);
+  } catch (err) {
+    console.error('POST /api/setup error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- Auto-detect: network interface ---
+app.get('/api/detect/iface', async (req, res) => {
+  const iface = await detectNetworkIface();
+  res.json({ iface });
+});
+
+// --- Auto-detect: Docker containers ---
+app.get('/api/detect/docker', async (req, res) => {
+  try {
+    const out = await run('docker ps --format "{{.Names}}"');
+    const containers = out.split('\n').filter(Boolean);
+    res.json({ containers });
+  } catch {
+    res.json({ containers: [] });
+  }
+});
+
+// --- Auto-detect: systemd user services ---
+app.get('/api/detect/services', async (req, res) => {
+  try {
+    const out = await run('systemctl --user list-units --type=service --state=active --no-legend --no-pager');
+    const services = out.split('\n')
+      .filter(Boolean)
+      .map(line => line.trim().split(/\s+/)[0].replace('.service', ''))
+      .filter(s => s && !s.startsWith('dbus') && !s.startsWith('xdg'));
+    res.json({ services });
+  } catch {
+    res.json({ services: [] });
+  }
+});
+
+// --- Metrics ---
 app.get('/api/metrics', async (req, res) => {
   try {
-    const botPromises = CONFIG.bots.map(b => getBotStatus(b.name, b.profile));
+    const botPromises = (CONFIG.bots || []).map(b => getBotStatus(b.name, b.profile));
     const [cpuUsage, cpuTemp, ram, disk, network, docker, systemd, weather, ...botResults] = await Promise.all([
-      getCpuUsage(),
-      getCpuTemp(),
-      getRam(),
-      getDisk(),
-      getNetworkSpeed(),
-      getDockerContainers(),
-      getSystemdServices(),
-      fetchWeather(),
-      ...botPromises
+      getCpuUsage(), getCpuTemp(), getRam(), getDisk(),
+      getNetworkSpeed(), getDockerContainers(), getSystemdServices(),
+      fetchWeather(), ...botPromises
     ]);
-
     res.json({
       system: {
         cpu: { usage: cpuUsage, temp: cpuTemp },
-        ram,
-        disk,
+        ram, disk,
         network: {
-          up: network.up,
-          down: network.down,
+          up: network.up, down: network.down,
           upFormatted: formatBytes(network.up),
           downFormatted: formatBytes(network.down)
         }
@@ -386,29 +460,36 @@ app.get('/api/metrics', async (req, res) => {
   }
 });
 
-// --- Startup ---
+// --- Setup + Settings page ---
+app.get('/setup', (req, res) => res.sendFile(path.join(__dirname, 'public', 'setup.html')));
+app.get('/settings', (req, res) => res.sendFile(path.join(__dirname, 'public', 'setup.html')));
+
+// ============================================================
+// Startup
+// ============================================================
 async function start() {
   CONFIG = await loadConfig();
 
-  // Resolve "auto" network interface
   if (CONFIG.networkIface === 'auto') {
     CONFIG.networkIface = await detectNetworkIface();
     console.log(`🌐 Network interface: ${CONFIG.networkIface}`);
   }
 
-  // Apply defaults for optional config keys
   CONFIG.botCacheTtl = CONFIG.botCacheTtl || 30 * 1000;
   CONFIG.weatherCacheTtl = CONFIG.weatherCacheTtl || 10 * 60 * 1000;
   if (!CONFIG.bots) CONFIG.bots = [];
   if (!CONFIG.systemdServices) CONFIG.systemdServices = [];
 
   const server = app.listen(CONFIG.port, '0.0.0.0', () => {
-    console.log(`\n🫀 Pulse running on http://0.0.0.0:${CONFIG.port}\n`);
-    // Warm up bot cache
-    if (CONFIG.bots.length > 0) {
-      Promise.all(CONFIG.bots.map(b => getBotStatus(b.name, b.profile)))
-        .then(() => console.log('Bot status cache warmed up'))
-        .catch(err => console.error('Bot cache warmup failed:', err.message));
+    if (setupMode) {
+      console.log(`\n⚙️  Pulse is in setup mode — open http://0.0.0.0:${CONFIG.port}/setup\n`);
+    } else {
+      console.log(`\n🫀 Pulse running on http://0.0.0.0:${CONFIG.port}\n`);
+      if (CONFIG.bots.length > 0) {
+        Promise.all(CONFIG.bots.map(b => getBotStatus(b.name, b.profile)))
+          .then(() => console.log('Bot status cache warmed up'))
+          .catch(err => console.error('Bot cache warmup failed:', err.message));
+      }
     }
   });
 
@@ -417,9 +498,7 @@ async function start() {
     server.close(() => process.exit(0));
   });
 
-  process.on('SIGINT', () => {
-    server.close(() => process.exit(0));
-  });
+  process.on('SIGINT', () => { server.close(() => process.exit(0)); });
 }
 
 start().catch(err => {

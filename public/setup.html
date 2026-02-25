@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pulse — Setup</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0f1117;
+      --bg2: #151820;
+      --bg3: #1c2030;
+      --border: #ffffff10;
+      --border-hover: #22d3ee30;
+      --cyan: #22d3ee;
+      --cyan-dim: #22d3ee15;
+      --text: #e2e8f0;
+      --text-dim: #94a3b8;
+      --text-muted: #475569;
+      --green: #4ade80;
+      --red: #f87171;
+      --yellow: #fbbf24;
+      --radius: 12px;
+      --radius-sm: 8px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { background: var(--bg); }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
+      min-height: 100vh;
+      padding: 32px 16px 64px;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(var(--border) 1px, transparent 1px),
+        linear-gradient(90deg, var(--border) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .container {
+      max-width: 680px;
+      margin: 0 auto;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* Header */
+    .header {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+    .header-logo { font-size: 32px; margin-bottom: 8px; }
+    .header-title {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -0.5px;
+    }
+    .header-sub {
+      font-size: 14px;
+      color: var(--text-dim);
+      margin-top: 6px;
+    }
+
+    /* Card */
+    .card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      margin-bottom: 16px;
+      transition: border-color 0.2s;
+    }
+    .card:hover { border-color: var(--border-hover); }
+
+    .card-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--cyan);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 20px;
+    }
+
+    /* Form fields */
+    .field { margin-bottom: 16px; }
+    .field:last-child { margin-bottom: 0; }
+
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-dim);
+      margin-bottom: 6px;
+    }
+
+    input[type="text"],
+    input[type="number"],
+    input[type="password"] {
+      width: 100%;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
+      font-size: 14px;
+      padding: 10px 14px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    input:focus {
+      border-color: var(--cyan);
+      box-shadow: 0 0 0 2px var(--cyan-dim);
+    }
+
+    input::placeholder { color: var(--text-muted); }
+
+    .field-row {
+      display: flex;
+      gap: 8px;
+      align-items: flex-end;
+    }
+    .field-row input { flex: 1; }
+
+    /* Detect button */
+    .btn-detect {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text-dim);
+      font-size: 12px;
+      font-family: 'Inter', sans-serif;
+      padding: 10px 12px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.2s;
+      flex-shrink: 0;
+    }
+    .btn-detect:hover {
+      border-color: var(--cyan);
+      color: var(--cyan);
+    }
+    .btn-detect:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* Toggle switch */
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 2px 0;
+    }
+    .toggle-label {
+      font-size: 14px;
+      color: var(--text);
+      font-weight: 500;
+    }
+    .toggle-sub {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .toggle {
+      position: relative;
+      width: 44px;
+      height: 24px;
+      flex-shrink: 0;
+    }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .toggle-track {
+      position: absolute;
+      inset: 0;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      cursor: pointer;
+      transition: background 0.2s, border-color 0.2s;
+    }
+    .toggle-track::after {
+      content: '';
+      position: absolute;
+      width: 16px;
+      height: 16px;
+      background: var(--text-muted);
+      border-radius: 50%;
+      top: 3px;
+      left: 3px;
+      transition: transform 0.2s, background 0.2s;
+    }
+    .toggle input:checked + .toggle-track {
+      background: var(--cyan-dim);
+      border-color: var(--cyan);
+    }
+    .toggle input:checked + .toggle-track::after {
+      background: var(--cyan);
+      transform: translateX(20px);
+    }
+
+    /* Tag list (docker containers, services) */
+    .tag-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 8px;
+      min-height: 32px;
+    }
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 12px;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text);
+    }
+    .tag-remove {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 14px;
+      line-height: 1;
+      padding: 0;
+      transition: color 0.15s;
+    }
+    .tag-remove:hover { color: var(--red); }
+
+    .tag-input-row {
+      display: flex;
+      gap: 8px;
+    }
+    .tag-input-row input { flex: 1; }
+
+    /* Docker mode radio */
+    .radio-group {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .radio-opt {
+      flex: 1;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-dim);
+    }
+    .radio-opt input { display: none; }
+    .radio-opt.selected {
+      border-color: var(--cyan);
+      color: var(--cyan);
+      background: var(--cyan-dim);
+    }
+    .radio-dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      border: 2px solid currentColor;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .radio-opt.selected .radio-dot::after {
+      content: '';
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--cyan);
+    }
+
+    /* Bot rows */
+    .bot-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 8px;
+      align-items: center;
+    }
+    .bot-row input { flex: 1; }
+    .bot-row .profile-input { max-width: 140px; }
+    .btn-remove-bot {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 8px 10px;
+      font-size: 14px;
+      transition: all 0.2s;
+      flex-shrink: 0;
+    }
+    .btn-remove-bot:hover { border-color: var(--red); color: var(--red); }
+
+    .btn-add {
+      background: none;
+      border: 1px dashed var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 13px;
+      font-family: 'Inter', sans-serif;
+      padding: 8px 14px;
+      width: 100%;
+      transition: all 0.2s;
+      margin-top: 4px;
+    }
+    .btn-add:hover { border-color: var(--cyan); color: var(--cyan); }
+
+    /* Collapsible */
+    .collapsible-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      user-select: none;
+    }
+    .collapsible-arrow {
+      font-size: 12px;
+      color: var(--text-muted);
+      transition: transform 0.2s;
+    }
+    .collapsible-body {
+      overflow: hidden;
+      max-height: 0;
+      transition: max-height 0.3s ease;
+    }
+    .collapsible-body.open { max-height: 600px; }
+    .collapsible-divider { margin-top: 20px; border-top: 1px solid var(--border); padding-top: 20px; }
+
+    /* Password field */
+    .pass-wrap { position: relative; }
+    .pass-wrap input { padding-right: 42px; }
+    .pass-toggle {
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 16px;
+      line-height: 1;
+      padding: 0;
+      transition: color 0.15s;
+    }
+    .pass-toggle:hover { color: var(--text); }
+
+    /* Auth fields */
+    .auth-fields { margin-top: 16px; }
+
+    /* Save button */
+    .save-wrap {
+      margin-top: 24px;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+    .btn-save {
+      background: var(--cyan);
+      border: none;
+      border-radius: var(--radius-sm);
+      color: #000;
+      cursor: pointer;
+      font-family: 'Inter', sans-serif;
+      font-size: 14px;
+      font-weight: 700;
+      padding: 12px 32px;
+      transition: opacity 0.2s;
+    }
+    .btn-save:hover { opacity: 0.85; }
+    .btn-save:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .btn-back {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text-dim);
+      cursor: pointer;
+      font-family: 'Inter', sans-serif;
+      font-size: 14px;
+      padding: 12px 20px;
+      text-decoration: none;
+      transition: border-color 0.2s, color 0.2s;
+      display: inline-block;
+    }
+    .btn-back:hover { border-color: var(--cyan); color: var(--cyan); }
+
+    .save-error {
+      font-size: 13px;
+      color: var(--red);
+      margin-top: 8px;
+    }
+
+    /* Helper text */
+    .hint {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 5px;
+    }
+
+    /* Restart overlay */
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 17, 23, 0.92);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      gap: 20px;
+      display: none;
+    }
+    .overlay.show { display: flex; }
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid var(--border);
+      border-top-color: var(--cyan);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .overlay-text { font-size: 16px; color: var(--text-dim); }
+    .overlay-sub { font-size: 13px; color: var(--text-muted); }
+  </style>
+</head>
+<body>
+
+<!-- Restart overlay -->
+<div class="overlay" id="overlay">
+  <div class="spinner"></div>
+  <div class="overlay-text">Restarting Pulse...</div>
+  <div class="overlay-sub" id="overlay-sub">Saving your configuration</div>
+</div>
+
+<div class="container">
+
+  <div class="header">
+    <div class="header-logo">🫀</div>
+    <div class="header-title" id="page-title">Welcome to Pulse</div>
+    <div class="header-sub" id="page-sub">Configure your dashboard to get started</div>
+  </div>
+
+  <!-- General -->
+  <div class="card">
+    <div class="card-title">General</div>
+
+    <div class="field">
+      <label for="label">Server Label</label>
+      <input type="text" id="label" placeholder="My Server" />
+      <div class="hint">Display name shown in the dashboard header</div>
+    </div>
+
+    <div class="field">
+      <label for="port">Port</label>
+      <input type="number" id="port" value="6682" min="1024" max="65535" />
+      <div class="hint">Pulse will restart and you'll be redirected if the port changes</div>
+    </div>
+
+    <div class="field">
+      <label for="weather">Weather City</label>
+      <input type="text" id="weather" placeholder="London" />
+    </div>
+  </div>
+
+  <!-- Network -->
+  <div class="card">
+    <div class="card-title">Network</div>
+    <div class="field">
+      <label>Network Interface</label>
+      <div class="field-row">
+        <input type="text" id="iface" placeholder="eth0" />
+        <button class="btn-detect" onclick="detectIface()">🔍 Auto-detect</button>
+      </div>
+      <div class="hint">Used for bandwidth monitoring (up/down speed)</div>
+    </div>
+  </div>
+
+  <!-- Docker -->
+  <div class="card">
+    <div class="card-title">Docker Containers</div>
+
+    <div class="radio-group">
+      <label class="radio-opt selected" id="docker-auto-opt" onclick="setDockerMode('auto')">
+        <input type="radio" name="docker-mode" value="auto" checked />
+        <div class="radio-dot"></div>
+        Auto-discover all
+      </label>
+      <label class="radio-opt" id="docker-manual-opt" onclick="setDockerMode('manual')">
+        <input type="radio" name="docker-mode" value="manual" />
+        <div class="radio-dot"></div>
+        Specific containers
+      </label>
+    </div>
+
+    <div id="docker-manual-section" style="display:none">
+      <div class="tag-list" id="docker-tags"></div>
+      <div class="tag-input-row">
+        <input type="text" id="docker-input" placeholder="container-name" onkeydown="handleDockerKey(event)" />
+        <button class="btn-detect" onclick="discoverDocker()">🔍 Discover</button>
+        <button class="btn-detect" onclick="addDockerTag()">+ Add</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Systemd -->
+  <div class="card">
+    <div class="card-title">Systemd Services</div>
+    <div class="tag-list" id="service-tags"></div>
+    <div class="tag-input-row">
+      <input type="text" id="service-input" placeholder="my-service" onkeydown="handleServiceKey(event)" />
+      <button class="btn-detect" onclick="discoverServices()">🔍 Discover</button>
+      <button class="btn-detect" onclick="addServiceTag()">+ Add</button>
+    </div>
+    <div class="hint" style="margin-top:8px">Systemd user services to monitor (systemctl --user)</div>
+  </div>
+
+  <!-- Security -->
+  <div class="card">
+    <div class="card-title">Security</div>
+
+    <div class="toggle-row">
+      <div>
+        <div class="toggle-label">Basic Auth</div>
+        <div class="toggle-sub">Protect dashboard with username &amp; password</div>
+      </div>
+      <label class="toggle">
+        <input type="checkbox" id="auth-enabled" onchange="toggleAuth()" />
+        <div class="toggle-track"></div>
+      </label>
+    </div>
+
+    <div class="auth-fields" id="auth-fields" style="display:none">
+      <div class="field" style="margin-top:16px">
+        <label for="auth-user">Username</label>
+        <input type="text" id="auth-user" placeholder="admin" autocomplete="off" />
+      </div>
+      <div class="field">
+        <label for="auth-pass">Password</label>
+        <div class="pass-wrap">
+          <input type="password" id="auth-pass" placeholder="••••••••" autocomplete="new-password" />
+          <button class="pass-toggle" onclick="togglePass()" type="button" title="Show/hide">👁</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bots (collapsible) -->
+  <div class="card">
+    <div class="collapsible-header" onclick="toggleBots()">
+      <div class="card-title" style="margin-bottom:0">OpenClaw Bots <span style="color:var(--text-muted);font-weight:400;font-size:11px;text-transform:none;letter-spacing:0">(optional)</span></div>
+      <div class="collapsible-arrow" id="bots-arrow">▶</div>
+    </div>
+    <div class="collapsible-body" id="bots-body">
+      <div class="collapsible-divider">
+        <div style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Add OpenClaw bot profiles to show their online status on the dashboard.</div>
+        <div id="bot-rows"></div>
+        <button class="btn-add" onclick="addBotRow()">+ Add Bot</button>
+        <div class="hint" style="margin-top:10px">Leave Profile empty for the default OpenClaw profile</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Actions -->
+  <div class="save-wrap">
+    <button class="btn-save" id="save-btn" onclick="save()">Save &amp; Restart</button>
+    <a class="btn-back" href="/" id="back-btn" style="display:none">← Back to Dashboard</a>
+  </div>
+  <div class="save-error" id="save-error"></div>
+
+</div><!-- /container -->
+
+<script>
+  const isSettings = window.location.pathname === '/settings';
+
+  // --- Init ---
+  window.addEventListener('DOMContentLoaded', async () => {
+    if (isSettings) {
+      document.getElementById('page-title').textContent = 'Settings';
+      document.getElementById('page-sub').textContent = 'Update your Pulse configuration';
+      document.getElementById('save-btn').textContent = 'Save & Restart';
+      document.getElementById('back-btn').style.display = 'inline-block';
+
+      try {
+        const res = await fetch('/api/config');
+        const cfg = await res.json();
+        prefill(cfg);
+      } catch (e) {
+        console.error('Failed to load config:', e);
+      }
+    }
+  });
+
+  function prefill(cfg) {
+    if (cfg.label) document.getElementById('label').value = cfg.label;
+    if (cfg.port) document.getElementById('port').value = cfg.port;
+    if (cfg.weatherLocation) document.getElementById('weather').value = cfg.weatherLocation;
+    if (cfg.networkIface && cfg.networkIface !== 'auto') document.getElementById('iface').value = cfg.networkIface;
+
+    // Docker
+    if (cfg.dockerContainers === 'auto' || !Array.isArray(cfg.dockerContainers)) {
+      setDockerMode('auto');
+    } else {
+      setDockerMode('manual');
+      cfg.dockerContainers.forEach(c => addTag('docker-tags', c));
+    }
+
+    // Services
+    if (Array.isArray(cfg.systemdServices)) {
+      cfg.systemdServices.forEach(s => addTag('service-tags', s));
+    }
+
+    // Auth
+    if (cfg.auth) {
+      document.getElementById('auth-enabled').checked = cfg.auth.enabled;
+      toggleAuth();
+      if (cfg.auth.username) document.getElementById('auth-user').value = cfg.auth.username;
+      if (cfg.auth.password) document.getElementById('auth-pass').value = cfg.auth.password;
+    }
+
+    // Bots
+    if (Array.isArray(cfg.bots) && cfg.bots.length > 0) {
+      // Open bots section
+      const body = document.getElementById('bots-body');
+      body.classList.add('open');
+      document.getElementById('bots-arrow').textContent = '▼';
+      cfg.bots.forEach(b => addBotRow(b.name, b.profile));
+    }
+  }
+
+  // --- Docker mode ---
+  let dockerMode = 'auto';
+
+  function setDockerMode(mode) {
+    dockerMode = mode;
+    document.getElementById('docker-manual-section').style.display = mode === 'manual' ? 'block' : 'none';
+    document.getElementById('docker-auto-opt').classList.toggle('selected', mode === 'auto');
+    document.getElementById('docker-manual-opt').classList.toggle('selected', mode === 'manual');
+  }
+
+  // --- Tags ---
+  function addTag(listId, value) {
+    value = value.trim();
+    if (!value) return;
+    // Deduplicate
+    const existing = [...document.getElementById(listId).querySelectorAll('.tag')].map(t => t.dataset.val);
+    if (existing.includes(value)) return;
+
+    const list = document.getElementById(listId);
+    const tag = document.createElement('div');
+    tag.className = 'tag';
+    tag.dataset.val = value;
+
+    const span = document.createElement('span');
+    span.textContent = value;
+
+    const btn = document.createElement('button');
+    btn.className = 'tag-remove';
+    btn.textContent = '×';
+    btn.onclick = () => tag.remove();
+
+    tag.appendChild(span);
+    tag.appendChild(btn);
+    list.appendChild(tag);
+  }
+
+  function getTags(listId) {
+    return [...document.getElementById(listId).querySelectorAll('.tag')].map(t => t.dataset.val);
+  }
+
+  function addDockerTag() {
+    const input = document.getElementById('docker-input');
+    addTag('docker-tags', input.value);
+    input.value = '';
+  }
+
+  function handleDockerKey(e) {
+    if (e.key === 'Enter') { e.preventDefault(); addDockerTag(); }
+  }
+
+  function addServiceTag() {
+    const input = document.getElementById('service-input');
+    addTag('service-tags', input.value);
+    input.value = '';
+  }
+
+  function handleServiceKey(e) {
+    if (e.key === 'Enter') { e.preventDefault(); addServiceTag(); }
+  }
+
+  // --- Auto-detect ---
+  async function detectIface() {
+    const btn = event.target;
+    btn.disabled = true;
+    btn.textContent = '...';
+    try {
+      const res = await fetch('/api/detect/iface');
+      const data = await res.json();
+      document.getElementById('iface').value = data.iface;
+    } catch {}
+    btn.disabled = false;
+    btn.textContent = '🔍 Auto-detect';
+  }
+
+  async function discoverDocker() {
+    const btn = event.target;
+    btn.disabled = true;
+    btn.textContent = '...';
+    try {
+      const res = await fetch('/api/detect/docker');
+      const data = await res.json();
+      // Switch to manual and populate
+      setDockerMode('manual');
+      data.containers.forEach(c => addTag('docker-tags', c));
+    } catch {}
+    btn.disabled = false;
+    btn.textContent = '🔍 Discover';
+  }
+
+  async function discoverServices() {
+    const btn = event.target;
+    btn.disabled = true;
+    btn.textContent = '...';
+    try {
+      const res = await fetch('/api/detect/services');
+      const data = await res.json();
+      data.services.forEach(s => addTag('service-tags', s));
+    } catch {}
+    btn.disabled = false;
+    btn.textContent = '🔍 Discover';
+  }
+
+  // --- Auth toggle ---
+  function toggleAuth() {
+    const enabled = document.getElementById('auth-enabled').checked;
+    document.getElementById('auth-fields').style.display = enabled ? 'block' : 'none';
+  }
+
+  // --- Password toggle ---
+  function togglePass() {
+    const input = document.getElementById('auth-pass');
+    input.type = input.type === 'password' ? 'text' : 'password';
+  }
+
+  // --- Bots ---
+  function toggleBots() {
+    const body = document.getElementById('bots-body');
+    const arrow = document.getElementById('bots-arrow');
+    const open = body.classList.toggle('open');
+    arrow.textContent = open ? '▼' : '▶';
+  }
+
+  function addBotRow(name = '', profile = '') {
+    const container = document.getElementById('bot-rows');
+    const row = document.createElement('div');
+    row.className = 'bot-row';
+
+    const nameInput = document.createElement('input');
+    nameInput.type = 'text';
+    nameInput.className = 'bot-name-input';
+    nameInput.placeholder = 'Bot Name';
+    nameInput.value = name;
+
+    const profileInput = document.createElement('input');
+    profileInput.type = 'text';
+    profileInput.className = 'profile-input';
+    profileInput.placeholder = 'profile (optional)';
+    profileInput.value = profile || '';
+
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'btn-remove-bot';
+    removeBtn.textContent = '×';
+    removeBtn.onclick = () => row.remove();
+
+    row.appendChild(nameInput);
+    row.appendChild(profileInput);
+    row.appendChild(removeBtn);
+    container.appendChild(row);
+  }
+
+  function getBots() {
+    return [...document.querySelectorAll('.bot-row')].map(row => ({
+      name: row.querySelector('.bot-name-input').value.trim() || 'Bot',
+      profile: row.querySelector('.profile-input').value.trim() || null
+    })).filter(b => b.name);
+  }
+
+  // --- Save ---
+  async function save() {
+    const btn = document.getElementById('save-btn');
+    const errEl = document.getElementById('save-error');
+    errEl.textContent = '';
+
+    const port = parseInt(document.getElementById('port').value);
+    const weatherLocation = document.getElementById('weather').value.trim();
+
+    if (!port || port < 1024 || port > 65535) {
+      errEl.textContent = 'Port must be between 1024 and 65535';
+      return;
+    }
+    if (!weatherLocation) {
+      errEl.textContent = 'Weather city is required';
+      return;
+    }
+
+    const authEnabled = document.getElementById('auth-enabled').checked;
+    if (authEnabled) {
+      if (!document.getElementById('auth-user').value.trim()) {
+        errEl.textContent = 'Username is required when auth is enabled';
+        return;
+      }
+      if (!document.getElementById('auth-pass').value) {
+        errEl.textContent = 'Password is required when auth is enabled';
+        return;
+      }
+    }
+
+    const cfg = {
+      label: document.getElementById('label').value.trim() || undefined,
+      port,
+      weatherLocation,
+      networkIface: document.getElementById('iface').value.trim() || 'auto',
+      dockerContainers: dockerMode === 'auto' ? 'auto' : getTags('docker-tags'),
+      systemdServices: getTags('service-tags'),
+      auth: {
+        enabled: authEnabled,
+        username: document.getElementById('auth-user').value.trim(),
+        password: document.getElementById('auth-pass').value
+      },
+      bots: getBots()
+    };
+
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+
+    try {
+      const res = await fetch('/api/setup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(cfg)
+      });
+      const data = await res.json();
+
+      if (!data.ok) {
+        errEl.textContent = data.error || 'Failed to save';
+        btn.disabled = false;
+        btn.textContent = isSettings ? 'Save & Restart' : 'Save & Restart';
+        return;
+      }
+
+      // Show overlay and poll for restart
+      const overlay = document.getElementById('overlay');
+      const overlaySub = document.getElementById('overlay-sub');
+      overlay.classList.add('show');
+
+      const newPort = data.port;
+      const currentPort = parseInt(window.location.port) || 80;
+
+      overlaySub.textContent = 'Waiting for Pulse to restart...';
+
+      // Poll health endpoint
+      const targetOrigin = newPort !== currentPort
+        ? `${window.location.protocol}//${window.location.hostname}:${newPort}`
+        : window.location.origin;
+
+      let attempts = 0;
+      const poll = setInterval(async () => {
+        attempts++;
+        try {
+          const health = await fetch(`${targetOrigin}/api/health`, { cache: 'no-store' });
+          if (health.ok) {
+            clearInterval(poll);
+            overlaySub.textContent = 'Done! Redirecting...';
+            setTimeout(() => { window.location.href = targetOrigin + '/'; }, 500);
+          }
+        } catch {
+          // Still restarting
+          if (attempts > 30) {
+            clearInterval(poll);
+            overlaySub.textContent = `Done. Open: ${targetOrigin}`;
+          }
+        }
+      }, 1000);
+
+    } catch (err) {
+      errEl.textContent = 'Network error: ' + err.message;
+      btn.disabled = false;
+      btn.textContent = 'Save & Restart';
+    }
+  }
+</script>
+</body>
+</html>
