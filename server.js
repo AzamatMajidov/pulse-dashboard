@@ -262,12 +262,8 @@ async function getSystemdServices() {
 // --- Bot Status ---
 const botCache = {};
 
-async function getBotStatus(name, profile) {
+async function fetchBotStatus(name, profile) {
   const key = profile || 'main';
-  const now = Date.now();
-  if (botCache[key] && now - botCache[key].time < CONFIG.botCacheTtl) {
-    return { name, ...botCache[key].data };
-  }
   try {
     const cmd = profile ? `openclaw --profile ${profile} status` : 'openclaw status';
     const out = await run(cmd, 15000);
@@ -285,12 +281,36 @@ async function getBotStatus(name, profile) {
       if (!isNaN(since)) uptime = formatDuration(Math.floor((Date.now() - since) / 1000));
     }
     const result = { online, lastActive, model, uptime };
-    botCache[key] = { time: now, data: result };
+    botCache[key] = { time: Date.now(), data: result, refreshing: false };
     return { name, ...result };
   } catch (err) {
-    console.error(`getBotStatus(${key}) failed:`, err.message);
-    return { name, online: false, lastActive: 'N/A', model: 'N/A', uptime: 'N/A' };
+    console.error(`fetchBotStatus(${key}) failed:`, err.message);
+    if (botCache[key]) botCache[key].refreshing = false;
+    return null;
   }
+}
+
+function getBotStatus(name, profile) {
+  const key = profile || 'main';
+  const now = Date.now();
+  const cached = botCache[key];
+
+  // Cache is fresh — return immediately
+  if (cached && now - cached.time < CONFIG.botCacheTtl) {
+    return Promise.resolve({ name, ...cached.data });
+  }
+
+  // Cache is stale but exists — return stale immediately, refresh in background
+  if (cached && !cached.refreshing) {
+    cached.refreshing = true;
+    fetchBotStatus(name, profile).catch(() => {});
+    return Promise.resolve({ name, ...cached.data });
+  }
+
+  // No cache yet — must wait (only happens on first load)
+  return fetchBotStatus(name, profile).then(result =>
+    result || { name, online: false, lastActive: 'N/A', model: 'N/A', uptime: 'N/A' }
+  );
 }
 
 // --- Weather ---
