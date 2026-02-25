@@ -495,7 +495,7 @@ async function start() {
     console.log(`🌐 Network interface: ${CONFIG.networkIface}`);
   }
 
-  CONFIG.botCacheTtl = CONFIG.botCacheTtl || 30 * 1000;
+  CONFIG.botCacheTtl = CONFIG.botCacheTtl || 5 * 60 * 1000;
   CONFIG.weatherCacheTtl = CONFIG.weatherCacheTtl || 10 * 60 * 1000;
   if (!CONFIG.bots) CONFIG.bots = [];
   if (!CONFIG.systemdServices) CONFIG.systemdServices = [];
