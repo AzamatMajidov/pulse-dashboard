@@ -486,10 +486,12 @@ GET /api/history?metric=ram&hours=720    → last 30 days
 
 ---
 
-## 9. Open Questions
+## 9. Decisions
 
-- [ ] Token usage: what does `openclaw status` output look like for session stats? Can we parse it reliably?
-- [ ] License: Ed25519 key generation — do we want a CLI tool for owner to generate keys, or a simple web UI?
-- [ ] Alerts: support email in v1 or Telegram only?
-- [ ] Multi-machine: push (agents report to central) or pull (central polls agents)?
-- [ ] Settings UI: add Alerts config section to existing `/settings` page, or separate `/settings/alerts`?
+| # | Question | Decision |
+|---|---|---|
+| 1 | Alerts v1 channels | **Telegram only** — email in v2 |
+| 2 | License key generation UI | **Simple web UI** — owner opens `/admin/license`, generates + signs keys |
+| 3 | Alerts config location | **Existing `/settings` page** — add Alerts section |
+| 4 | Multi-machine | **Pull** — central instance polls agents (simpler, no agent changes needed) |
+| 5 | Token usage source | TBD — needs investigation of openclaw session file format |
