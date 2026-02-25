@@ -1,0 +1,15 @@
+{
+  "port": 6682,
+  "networkIface": "auto",
+  "weatherLocation": "London",
+  "dockerContainers": "auto",
+  "systemdServices": ["my-service"],
+  "auth": {
+    "enabled": true,
+    "username": "admin",
+    "password": "changeme"
+  },
+  "bots": [
+    { "name": "My Bot", "profile": null }
+  ]
+}

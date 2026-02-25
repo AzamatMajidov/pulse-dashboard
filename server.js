@@ -4,24 +4,61 @@ const fs = require('fs');
 const http = require('http');
 const path = require('path');
 
-// --- Config ---
-const CONFIG = {
-  port: 6682,
-  networkIface: 'enp2s0',
-  weatherLocation: 'Tashkent',
-  weatherCacheTtl: 10 * 60 * 1000,   // 10 minutes
-  botCacheTtl: 30 * 1000,             // 30 seconds
-  dockerContainers: ['roast-postgres', 'mongo', 'roast-redis'],
-  systemdServices: ['kuydirchi'],
-};
+// --- Load Config ---
+async function loadConfig() {
+  const configPath = path.join(__dirname, 'config.json');
+  const examplePath = path.join(__dirname, 'config.example.json');
+  try {
+    const raw = await fs.promises.readFile(configPath, 'utf8');
+    return JSON.parse(raw);
+  } catch {
+    try {
+      const raw = await fs.promises.readFile(examplePath, 'utf8');
+      console.log('⚠️  config.json not found, using config.example.json');
+      return JSON.parse(raw);
+    } catch {
+      throw new Error('No config.json or config.example.json found. Run setup.sh first.');
+    }
+  }
+}
+
+// --- Auto-detect network interface ---
+async function detectNetworkIface() {
+  try {
+    const raw = await fs.promises.readFile('/proc/net/dev', 'utf8');
+    const lines = raw.split('\n').slice(2).filter(Boolean);
+    for (const line of lines) {
+      const name = line.trim().split(':')[0].trim();
+      if (name && name !== 'lo') return name;
+    }
+  } catch (err) {
+    console.error('detectNetworkIface failed:', err.message);
+  }
+  return 'eth0';
+}
+
+let CONFIG = {};
 
 const app = express();
 
-// Serve static files (same-origin requests don't need CORS)
+// --- Basic Auth Middleware ---
+app.use((req, res, next) => {
+  if (!CONFIG.auth || !CONFIG.auth.enabled) return next();
+  const header = req.headers.authorization || '';
+  const b64 = header.startsWith('Basic ') ? header.slice(6) : '';
+  const decoded = Buffer.from(b64, 'base64').toString();
+  const colon = decoded.indexOf(':');
+  const user = colon >= 0 ? decoded.slice(0, colon) : '';
+  const pass = colon >= 0 ? decoded.slice(colon + 1) : '';
+  if (user === CONFIG.auth.username && pass === CONFIG.auth.password) return next();
+  res.set('WWW-Authenticate', 'Basic realm="Pulse"');
+  res.status(401).send('Unauthorized');
+});
+
+// Serve static files
 app.use(express.static(path.join(__dirname, 'public')));
 
 // --- Helpers ---
-
 function run(cmd, timeoutMs = 5000) {
   return new Promise((resolve) => {
     exec(cmd, { timeout: timeoutMs }, (err, stdout) => {
@@ -34,7 +71,7 @@ function sleep(ms) {
   return new Promise(r => setTimeout(r, ms));
 }
 
-// --- CPU Usage (async file I/O) ---
+// --- CPU Usage ---
 async function readCpuStats() {
   const raw = await fs.promises.readFile('/proc/stat', 'utf8');
   const parts = raw.split('\n')[0].trim().split(/\s+/).slice(1).map(Number);
@@ -75,7 +112,7 @@ async function getCpuTemp() {
   return null;
 }
 
-// --- RAM (async file I/O) ---
+// --- RAM ---
 async function getRam() {
   try {
     const raw = await fs.promises.readFile('/proc/meminfo', 'utf8');
@@ -117,7 +154,7 @@ async function getDisk() {
   }
 }
 
-// --- Network Speed (async file I/O) ---
+// --- Network Speed ---
 let lastNetStats = null;
 let lastNetTime = null;
 
@@ -156,17 +193,35 @@ async function getDockerContainers() {
   try {
     const out = await run('docker ps -a --format "{{.Names}}|{{.Status}}"');
     const lines = out.split('\n').filter(Boolean);
+
+    // Auto-discover: return all running containers
+    if (CONFIG.dockerContainers === 'auto') {
+      return lines.map(line => {
+        const [name, ...rest] = line.split('|');
+        const statusFull = rest.join('|');
+        const running = statusFull.toLowerCase().startsWith('up');
+        const uptime = running
+          ? statusFull.replace(/^Up\s+/i, '')
+          : 'stopped';
+        return { name, running, uptime };
+      });
+    }
+
+    // Specific list: filter by configured names
     return CONFIG.dockerContainers.map(name => {
       const line = lines.find(l => l.startsWith(name + '|'));
       if (!line) return { name, running: false, uptime: '' };
       const [, statusFull] = line.split('|');
       const running = statusFull.toLowerCase().startsWith('up');
-      const uptime = statusFull.replace(/^Up\s+/i, '').replace(/^Exited.*/, 'stopped');
-      return { name, running, uptime: running ? uptime : 'stopped' };
+      const uptime = running
+        ? statusFull.replace(/^Up\s+/i, '')
+        : 'stopped';
+      return { name, running, uptime };
     });
   } catch (err) {
     console.error('getDockerContainers failed:', err.message);
-    return CONFIG.dockerContainers.map(name => ({ name, running: false, uptime: 'N/A' }));
+    const names = CONFIG.dockerContainers === 'auto' ? [] : CONFIG.dockerContainers;
+    return names.map(name => ({ name, running: false, uptime: 'N/A' }));
   }
 }
 
@@ -196,11 +251,11 @@ async function getSystemdServices() {
 // --- Bot Status (cached, openclaw takes ~8s) ---
 const botCache = {};
 
-async function getBotStatus(profile) {
+async function getBotStatus(name, profile) {
   const key = profile || 'main';
   const now = Date.now();
   if (botCache[key] && now - botCache[key].time < CONFIG.botCacheTtl) {
-    return botCache[key].data;
+    return { name, ...botCache[key].data };
   }
   try {
     const cmd = profile ? `openclaw --profile ${profile} status` : 'openclaw status';
@@ -220,10 +275,10 @@ async function getBotStatus(profile) {
     }
     const result = { online, lastActive, model, uptime };
     botCache[key] = { time: now, data: result };
-    return result;
+    return { name, ...result };
   } catch (err) {
     console.error(`getBotStatus(${key}) failed:`, err.message);
-    return { online: false, lastActive: 'N/A', model: 'N/A', uptime: 'N/A' };
+    return { name, online: false, lastActive: 'N/A', model: 'N/A', uptime: 'N/A' };
   }
 }
 
@@ -251,7 +306,7 @@ async function fetchWeather() {
     return weatherCache;
   }
   try {
-    const data = await httpGet(`https://wttr.in/${CONFIG.weatherLocation}?format=j1`);
+    const data = await httpGet(`https://wttr.in/${encodeURIComponent(CONFIG.weatherLocation)}?format=j1`);
     const json = JSON.parse(data);
     const current = json.current_condition[0];
     const temp = parseInt(current.temp_C);
@@ -295,7 +350,8 @@ function formatBytes(bytes) {
 // --- API ---
 app.get('/api/metrics', async (req, res) => {
   try {
-    const [cpuUsage, cpuTemp, ram, disk, network, docker, systemd, qulvachcha, oshna, weather] = await Promise.all([
+    const botPromises = CONFIG.bots.map(b => getBotStatus(b.name, b.profile));
+    const [cpuUsage, cpuTemp, ram, disk, network, docker, systemd, weather, ...botResults] = await Promise.all([
       getCpuUsage(),
       getCpuTemp(),
       getRam(),
@@ -303,9 +359,8 @@ app.get('/api/metrics', async (req, res) => {
       getNetworkSpeed(),
       getDockerContainers(),
       getSystemdServices(),
-      getBotStatus(null),
-      getBotStatus('personal'),
-      fetchWeather()
+      fetchWeather(),
+      ...botPromises
     ]);
 
     res.json({
@@ -321,7 +376,7 @@ app.get('/api/metrics', async (req, res) => {
         }
       },
       services: { docker, systemd },
-      bots: { qulvachcha, oshna },
+      bots: botResults,
       weather,
       timestamp: Date.now()
     });
@@ -331,19 +386,43 @@ app.get('/api/metrics', async (req, res) => {
   }
 });
 
-// --- Server + Graceful Shutdown ---
-const server = app.listen(CONFIG.port, '0.0.0.0', () => {
-  console.log(`\n🫀 Pulse running on http://0.0.0.0:${CONFIG.port}\n`);
-  Promise.all([getBotStatus(null), getBotStatus('personal')])
-    .then(() => console.log('Bot status cache warmed up'))
-    .catch(err => console.error('Bot cache warmup failed:', err.message));
-});
+// --- Startup ---
+async function start() {
+  CONFIG = await loadConfig();
 
-process.on('SIGTERM', () => {
-  console.log('SIGTERM received, shutting down gracefully...');
-  server.close(() => process.exit(0));
-});
+  // Resolve "auto" network interface
+  if (CONFIG.networkIface === 'auto') {
+    CONFIG.networkIface = await detectNetworkIface();
+    console.log(`🌐 Network interface: ${CONFIG.networkIface}`);
+  }
 
-process.on('SIGINT', () => {
-  server.close(() => process.exit(0));
+  // Apply defaults for optional config keys
+  CONFIG.botCacheTtl = CONFIG.botCacheTtl || 30 * 1000;
+  CONFIG.weatherCacheTtl = CONFIG.weatherCacheTtl || 10 * 60 * 1000;
+  if (!CONFIG.bots) CONFIG.bots = [];
+  if (!CONFIG.systemdServices) CONFIG.systemdServices = [];
+
+  const server = app.listen(CONFIG.port, '0.0.0.0', () => {
+    console.log(`\n🫀 Pulse running on http://0.0.0.0:${CONFIG.port}\n`);
+    // Warm up bot cache
+    if (CONFIG.bots.length > 0) {
+      Promise.all(CONFIG.bots.map(b => getBotStatus(b.name, b.profile)))
+        .then(() => console.log('Bot status cache warmed up'))
+        .catch(err => console.error('Bot cache warmup failed:', err.message));
+    }
+  });
+
+  process.on('SIGTERM', () => {
+    console.log('SIGTERM received, shutting down gracefully...');
+    server.close(() => process.exit(0));
+  });
+
+  process.on('SIGINT', () => {
+    server.close(() => process.exit(0));
+  });
+}
+
+start().catch(err => {
+  console.error('Failed to start Pulse:', err.message);
+  process.exit(1);
 });

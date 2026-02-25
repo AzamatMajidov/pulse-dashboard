@@ -540,7 +540,7 @@
     <div class="hero">
       <div class="hero-left">
         <div class="hero-title">🫀 Pulse</div>
-        <div class="hero-hostname">azamat-Intel · home server</div>
+        <div class="hero-hostname">home server</div>
       </div>
       <div class="hero-center">
         <div id="clock">00:00:00</div>
@@ -551,7 +551,7 @@
           <div class="weather-icon" id="weather-icon">🌡️</div>
           <div class="weather-info">
             <div class="weather-temp"><span id="weather-temp">--</span>°C</div>
-            <div class="weather-desc" id="weather-desc">Tashkent</div>
+            <div class="weather-desc" id="weather-desc">--</div>
           </div>
         </div>
       </div>
@@ -596,7 +596,7 @@
 
       <!-- Network -->
       <div class="card" id="card-net">
-        <div class="card-label"><span class="icon">🌐</span> Network <span style="color:var(--text-muted);font-size:10px;margin-left:4px;font-family:'JetBrains Mono',monospace">enp2s0</span></div>
+        <div class="card-label"><span class="icon">🌐</span> Network</div>
         <div class="net-grid">
           <div class="net-item">
             <div class="net-item-label">↓</div>
@@ -640,60 +640,14 @@
       <div class="section-line"></div>
     </div>
 
-    <div class="grid-2">
-      <!-- Qulvachcha -->
-      <div class="card bot-card" id="bot-q">
+    <div class="grid-2" id="bots-grid">
+      <div class="card bot-card">
         <div class="bot-header">
           <div class="bot-name">
-            <div class="bot-emoji">🐣</div>
-            <div>
-              <div class="bot-title">Qulvachcha</div>
-              <div class="bot-role">Work · Dev &amp; Product</div>
-            </div>
+            <div class="bot-emoji">🤖</div>
+            <div><div class="bot-title">Loading...</div></div>
           </div>
-          <div class="bot-status offline" id="q-status">● Offline</div>
-        </div>
-        <div class="bot-stats">
-          <div class="bot-stat">
-            <div class="bot-stat-label">Last Active</div>
-            <div class="bot-stat-value" id="q-last">--</div>
-          </div>
-          <div class="bot-stat">
-            <div class="bot-stat-label">Model</div>
-            <div class="bot-stat-value" id="q-model">--</div>
-          </div>
-          <div class="bot-stat">
-            <div class="bot-stat-label">Uptime</div>
-            <div class="bot-stat-value" id="q-uptime">--</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Oshna -->
-      <div class="card bot-card" id="bot-o">
-        <div class="bot-header">
-          <div class="bot-name">
-            <div class="bot-emoji">🌸</div>
-            <div>
-              <div class="bot-title">Oshna</div>
-              <div class="bot-role">Personal · Life &amp; Schedule</div>
-            </div>
-          </div>
-          <div class="bot-status offline" id="o-status">● Offline</div>
-        </div>
-        <div class="bot-stats">
-          <div class="bot-stat">
-            <div class="bot-stat-label">Last Active</div>
-            <div class="bot-stat-value" id="o-last">--</div>
-          </div>
-          <div class="bot-stat">
-            <div class="bot-stat-label">Model</div>
-            <div class="bot-stat-value" id="o-model">--</div>
-          </div>
-          <div class="bot-stat">
-            <div class="bot-stat-label">Uptime</div>
-            <div class="bot-stat-value" id="o-uptime">--</div>
-          </div>
+          <div class="bot-status offline">● Offline</div>
         </div>
       </div>
     </div>
@@ -772,7 +726,7 @@
     function renderDocker(containers) {
       const list = document.getElementById('docker-list');
       list.replaceChildren(...containers.map(c =>
-        makeServiceRow(c.name.replace('roast-', ''), c.running, c.running ? 'running' : 'stopped', c.uptime)
+        makeServiceRow(c.name, c.running, c.running ? 'running' : 'stopped', c.uptime)
       ));
     }
 
@@ -784,14 +738,56 @@
       ));
     }
 
-    // Render bot
-    function renderBot(prefix, bot) {
-      const statusEl = document.getElementById(prefix + '-status');
-      statusEl.textContent = bot.online ? '● Online' : '● Offline';
-      statusEl.className = 'bot-status ' + (bot.online ? 'online' : 'offline');
-      document.getElementById(prefix + '-last').textContent = bot.lastActive || '--';
-      document.getElementById(prefix + '-model').textContent = (bot.model || '--').replace('claude-', '');
-      document.getElementById(prefix + '-uptime').textContent = bot.uptime || '--';
+    // Render bots dynamically (XSS-safe: uses textContent only)
+    function renderBots(bots) {
+      const grid = document.getElementById('bots-grid');
+      grid.replaceChildren(...bots.map(bot => {
+        const card = document.createElement('div');
+        card.className = 'card bot-card';
+
+        const header = document.createElement('div');
+        header.className = 'bot-header';
+
+        const nameWrap = document.createElement('div');
+        nameWrap.className = 'bot-name';
+        const emoji = document.createElement('div');
+        emoji.className = 'bot-emoji';
+        emoji.textContent = '🤖';
+        const nameInfo = document.createElement('div');
+        const title = document.createElement('div');
+        title.className = 'bot-title';
+        title.textContent = bot.name;
+        nameInfo.append(title);
+        nameWrap.append(emoji, nameInfo);
+
+        const status = document.createElement('div');
+        status.className = 'bot-status ' + (bot.online ? 'online' : 'offline');
+        status.textContent = bot.online ? '● Online' : '● Offline';
+
+        header.append(nameWrap, status);
+
+        const stats = document.createElement('div');
+        stats.className = 'bot-stats';
+        [
+          ['Last Active', bot.lastActive || '--'],
+          ['Model', (bot.model || '--').replace('claude-', '')],
+          ['Uptime', bot.uptime || '--']
+        ].forEach(([label, value]) => {
+          const stat = document.createElement('div');
+          stat.className = 'bot-stat';
+          const lbl = document.createElement('div');
+          lbl.className = 'bot-stat-label';
+          lbl.textContent = label;
+          const val = document.createElement('div');
+          val.className = 'bot-stat-value';
+          val.textContent = value;
+          stat.append(lbl, val);
+          stats.append(stat);
+        });
+
+        card.append(header, stats);
+        return card;
+      }));
     }
 
     // Fetch and render metrics
@@ -803,7 +799,7 @@
         // Weather
         document.getElementById('weather-icon').textContent = d.weather?.icon || '🌡️';
         document.getElementById('weather-temp').textContent = d.weather?.temp ?? '--';
-        document.getElementById('weather-desc').textContent = d.weather?.description || 'Tashkent';
+        document.getElementById('weather-desc').textContent = d.weather?.description || '--';
 
         // CPU
         const cpuPct = d.system?.cpu?.usage ?? 0;
@@ -852,8 +848,7 @@
         if (d.services?.systemd) renderSystemd(d.services.systemd);
 
         // Bots
-        if (d.bots?.qulvachcha) renderBot('q', d.bots.qulvachcha);
-        if (d.bots?.oshna) renderBot('o', d.bots.oshna);
+        if (Array.isArray(d.bots)) renderBots(d.bots);
 
         // Last updated
         const ts = new Date(d.timestamp);
