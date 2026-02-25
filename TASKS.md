@@ -52,15 +52,15 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done
 
 ## Phase 3 — Gateway Controls + Model Switch (F07)
 
-- [ ] T29 `GET /api/openclaw/models` — reads `~/.openclaw/openclaw.json`, returns `{ primary, models: [{ id, alias, active }] }`
-- [ ] T30 `POST /api/openclaw/gateway { action: restart|stop|start }` — runs `openclaw gateway ACTION`
-- [ ] T31 `POST /api/openclaw/model { model }` — edits `agents.defaults.model.primary` in `openclaw.json` → restarts gateway
-- [ ] T32 `POST /api/openclaw/clear-sessions { profile }` — clears OpenClaw sessions
-- [ ] T33 Bot card action bar — add bottom section to bot card: `[⟳ Restart] [⏹ Stop]` + model dropdown
-- [ ] T34 Model dropdown — populated from `GET /api/openclaw/models` on page load; shows alias if set (e.g. "sonnet"), shows `✓` on active model
-- [ ] T35 Confirmation on destructive actions (Stop, Restart) — inline dialog on card
-- [ ] T36 Spinner on bot card during gateway restart — card dims, spinner shows
-- [ ] T37 Bot card updates after action — re-fetch bot status once action completes
+- [x] T29 `GET /api/openclaw/models` — reads `~/.openclaw/openclaw.json`, returns `{ primary, models: [{ id, alias, active }] }`
+- [x] T30 `POST /api/openclaw/gateway { action: restart|stop|start }` — runs `openclaw gateway ACTION`
+- [x] T31 `POST /api/openclaw/model { model }` — edits `agents.defaults.model.primary` in `openclaw.json` → restarts gateway
+- [x] T32 `POST /api/openclaw/clear-sessions { profile }` — clears OpenClaw sessions
+- [x] T33 Bot card action bar — add bottom section to bot card: `[⟳ Restart] [⏹ Stop]` + model dropdown
+- [x] T34 Model dropdown — populated from `GET /api/openclaw/models` on page load; shows alias if set (e.g. "sonnet"), shows `✓` on active model
+- [x] T35 Confirmation on destructive actions (Stop, Restart) — inline dialog on card
+- [x] T36 Spinner on bot card during gateway restart — card dims, spinner shows
+- [x] T37 Bot card updates after action — re-fetch bot status once action completes
 
 ---
 

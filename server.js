@@ -734,6 +734,75 @@ app.post('/api/action/restart-docker', async (req, res) => {
   }
 });
 
+// T29 — GET /api/openclaw/models
+app.get('/api/openclaw/models', async (req, res) => {
+  try {
+    const ocPath = path.join(os.homedir(), '.openclaw', 'openclaw.json');
+    const raw = await fs.promises.readFile(ocPath, 'utf8');
+    const oc = JSON.parse(raw);
+    const primary = oc?.agents?.defaults?.model?.primary || null;
+    const modelsObj = oc?.agents?.defaults?.models || {};
+    const models = Object.entries(modelsObj).map(([id, meta]) => ({
+      id,
+      alias: meta.alias || null,
+      active: id === primary
+    }));
+    res.json({ primary, models });
+  } catch {
+    res.json({ primary: null, models: [] });
+  }
+});
+
+// T30 — POST /api/openclaw/gateway
+app.post('/api/openclaw/gateway', async (req, res) => {
+  try {
+    const { action } = req.body;
+    if (!['restart', 'stop', 'start'].includes(action)) {
+      return res.status(400).json({ ok: false, error: 'Invalid action. Must be restart, stop, or start.' });
+    }
+    await run(`openclaw gateway ${action}`, 15000);
+    res.json({ ok: true, action });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// T31 — POST /api/openclaw/model
+app.post('/api/openclaw/model', async (req, res) => {
+  try {
+    const { model } = req.body;
+    if (!model || typeof model !== 'string') {
+      return res.status(400).json({ ok: false, error: 'Model is required' });
+    }
+    const ocPath = path.join(os.homedir(), '.openclaw', 'openclaw.json');
+    const raw = await fs.promises.readFile(ocPath, 'utf8');
+    const oc = JSON.parse(raw);
+    if (!oc.agents) oc.agents = {};
+    if (!oc.agents.defaults) oc.agents.defaults = {};
+    if (!oc.agents.defaults.model) oc.agents.defaults.model = {};
+    oc.agents.defaults.model.primary = model;
+    await fs.promises.writeFile(ocPath, JSON.stringify(oc, null, 2));
+    await run('openclaw gateway restart', 15000);
+    // Invalidate bot cache so next fetch gets fresh status
+    Object.keys(botCache).forEach(k => { botCache[k].time = 0; });
+    res.json({ ok: true, model });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// T32 — POST /api/openclaw/clear-sessions
+app.post('/api/openclaw/clear-sessions', async (req, res) => {
+  try {
+    const { profile } = req.body;
+    const cmd = profile ? `openclaw sessions clear --profile ${profile}` : 'openclaw sessions clear';
+    await run(cmd, 15000);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 // --- Setup + Settings page ---
 app.get('/setup', (req, res) => res.sendFile(path.join(__dirname, 'public', 'setup.html')));
 app.get('/settings', (req, res) => res.sendFile(path.join(__dirname, 'public', 'setup.html')));

@@ -526,6 +526,101 @@
       font-family: 'JetBrains Mono', monospace;
     }
 
+    /* === BOT ACTION BAR === */
+    .bot-action-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding-top: 12px;
+      border-top: 1px solid var(--border);
+    }
+
+    .bot-action-bar select {
+      flex: 1;
+      min-width: 0;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 12px;
+      font-family: 'JetBrains Mono', monospace;
+      padding: 5px 8px;
+      cursor: pointer;
+      appearance: none;
+      -webkit-appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23475569'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 8px center;
+      padding-right: 22px;
+    }
+
+    .bot-action-bar select:focus {
+      outline: none;
+      border-color: var(--cyan);
+    }
+
+    .bot-action-bar select option {
+      background: var(--bg2);
+      color: var(--text);
+    }
+
+    .bot-action-label {
+      font-size: 10px;
+      color: var(--text-muted);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .bot-action-btn {
+      height: 28px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: none;
+      color: var(--text-dim);
+      cursor: pointer;
+      font-size: 12px;
+      font-family: 'JetBrains Mono', monospace;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 0 10px;
+      transition: border-color 0.2s, color 0.2s;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .bot-action-btn:hover {
+      border-color: var(--border-hover);
+      color: var(--cyan);
+    }
+
+    .bot-action-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .bot-card-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(15, 17, 23, 0.6);
+      border-radius: var(--radius);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10;
+    }
+
+    .bot-card-spinner {
+      width: 24px;
+      height: 24px;
+      border: 3px solid var(--border);
+      border-top-color: var(--cyan);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
     /* === REFRESH INDICATOR === */
     .footer {
       display: flex;
@@ -943,12 +1038,36 @@
       }));
     }
 
+    // T34 — OpenClaw models cache
+    let _openclawModels = { primary: null, models: [] };
+
+    async function fetchOpenclawModels() {
+      try {
+        const res = await fetch('/api/openclaw/models');
+        _openclawModels = await res.json();
+      } catch {}
+    }
+
+    // Fetch models on page load
+    fetchOpenclawModels();
+
+    // Track bot cards with active gateway actions
+    const _activeBotActions = new Set();
+
     // Render bots dynamically (XSS-safe: uses textContent only)
+    // T33-T37: includes action bar with model dropdown, restart/stop, confirmation, spinner
     function renderBots(bots) {
       const grid = document.getElementById('bots-grid');
       grid.replaceChildren(...bots.map(bot => {
+        // Skip re-render if this bot has an active action
+        if (_activeBotActions.has(bot.name)) {
+          const existing = grid.querySelector('[data-bot="' + bot.name + '"]');
+          if (existing) return existing;
+        }
+
         const card = document.createElement('div');
         card.className = 'card bot-card';
+        card.setAttribute('data-bot', bot.name);
 
         const header = document.createElement('div');
         header.className = 'bot-header';
@@ -957,7 +1076,7 @@
         nameWrap.className = 'bot-name';
         const emoji = document.createElement('div');
         emoji.className = 'bot-emoji';
-        emoji.textContent = '🤖';
+        emoji.textContent = '\uD83E\uDD16';
         const nameInfo = document.createElement('div');
         const title = document.createElement('div');
         title.className = 'bot-title';
@@ -967,7 +1086,7 @@
 
         const status = document.createElement('div');
         status.className = 'bot-status ' + (bot.online ? 'online' : 'offline');
-        status.textContent = bot.online ? '● Online' : '● Offline';
+        status.textContent = bot.online ? '\u25CF Online' : '\u25CF Offline';
 
         header.append(nameWrap, status);
 
@@ -977,7 +1096,7 @@
           ['Last Active', bot.lastActive || '--'],
           ['Model', (bot.model || '--').replace('claude-', '')],
           ['Uptime', bot.uptime || '--']
-        ].forEach(([label, value]) => {
+        ].forEach(function([label, value]) {
           const stat = document.createElement('div');
           stat.className = 'bot-stat';
           const lbl = document.createElement('div');
@@ -990,7 +1109,149 @@
           stats.append(stat);
         });
 
-        card.append(header, stats);
+        // T33 — Action bar
+        const actionBar = document.createElement('div');
+        actionBar.className = 'bot-action-bar';
+
+        // T34 — Model dropdown
+        const modelLabel = document.createElement('span');
+        modelLabel.className = 'bot-action-label';
+        modelLabel.textContent = 'Model (global)';
+
+        const modelSelect = document.createElement('select');
+        modelSelect.title = 'Switch model (applies to all bots)';
+        if (_openclawModels.models.length === 0) {
+          const opt = document.createElement('option');
+          opt.textContent = 'No models';
+          opt.disabled = true;
+          modelSelect.append(opt);
+          modelSelect.disabled = true;
+        } else {
+          _openclawModels.models.forEach(function(m) {
+            const opt = document.createElement('option');
+            opt.value = m.id;
+            var label = m.alias || m.id.replace('anthropic/', '');
+            opt.textContent = (m.active ? '\u2713 ' : '') + label;
+            if (m.active) opt.selected = true;
+            modelSelect.append(opt);
+          });
+        }
+
+        modelSelect.onchange = async function() {
+          var selectedModel = modelSelect.value;
+          if (!selectedModel) return;
+          _activeBotActions.add(bot.name);
+          showOverlay();
+          try {
+            var res = await fetch('/api/openclaw/model', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ model: selectedModel })
+            });
+            var data = await res.json();
+            if (data.ok) {
+              showToast('Model switched to ' + selectedModel.replace('anthropic/', ''));
+              await fetchOpenclawModels();
+              await fetchMetrics();
+            } else {
+              showToast('Failed: ' + (data.error || 'unknown error'));
+            }
+          } catch (err) {
+            showToast('Model switch failed: ' + err.message);
+          }
+          _activeBotActions.delete(bot.name);
+          hideOverlay();
+        };
+
+        // T35 — Restart button with confirmation
+        var restartBtn = document.createElement('button');
+        restartBtn.className = 'bot-action-btn';
+        restartBtn.textContent = '\u27F3 Restart';
+        restartBtn.title = 'Restart gateway';
+
+        // T35 — Stop button with confirmation
+        var stopBtn = document.createElement('button');
+        stopBtn.className = 'bot-action-btn';
+        stopBtn.textContent = '\u23F9 Stop';
+        stopBtn.title = 'Stop gateway';
+
+        // Confirmation state holder
+        var confirmHolder = document.createElement('div');
+        confirmHolder.style.cssText = 'display:none;align-items:center;gap:6px';
+
+        function showConfirm(actionText, action) {
+          restartBtn.style.display = 'none';
+          stopBtn.style.display = 'none';
+          confirmHolder.style.display = 'flex';
+          confirmHolder.replaceChildren();
+          var text = document.createElement('span');
+          text.className = 'confirm-text';
+          text.textContent = actionText + ' gateway?';
+          var yesBtn = document.createElement('button');
+          yesBtn.className = 'confirm-btn confirm-yes';
+          yesBtn.textContent = '\u2713';
+          yesBtn.onclick = function() { doGatewayAction(action); };
+          var noBtn = document.createElement('button');
+          noBtn.className = 'confirm-btn confirm-no';
+          noBtn.textContent = '\u2717';
+          noBtn.onclick = hideConfirm;
+          confirmHolder.append(text, yesBtn, noBtn);
+        }
+
+        function hideConfirm() {
+          confirmHolder.style.display = 'none';
+          restartBtn.style.display = '';
+          stopBtn.style.display = '';
+        }
+
+        restartBtn.onclick = function() { showConfirm('Restart', 'restart'); };
+        stopBtn.onclick = function() { showConfirm('Stop', 'stop'); };
+
+        // T36 — Spinner overlay
+        var overlay = null;
+        function showOverlay() {
+          if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.className = 'bot-card-overlay';
+            var spinner = document.createElement('div');
+            spinner.className = 'bot-card-spinner';
+            overlay.append(spinner);
+          }
+          card.append(overlay);
+        }
+        function hideOverlay() {
+          if (overlay && overlay.parentNode) overlay.remove();
+        }
+
+        // T37 — Gateway action with auto-refresh
+        async function doGatewayAction(action) {
+          hideConfirm();
+          _activeBotActions.add(bot.name);
+          showOverlay();
+          try {
+            var res = await fetch('/api/openclaw/gateway', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: action })
+            });
+            var data = await res.json();
+            if (data.ok) {
+              showToast('Gateway ' + action + ' succeeded');
+              // Wait a moment for the service to settle, then refresh
+              await new Promise(function(r) { setTimeout(r, 2000); });
+              await fetchMetrics();
+            } else {
+              showToast('Gateway ' + action + ' failed: ' + (data.error || 'unknown'));
+            }
+          } catch (err) {
+            showToast('Gateway ' + action + ' failed: ' + err.message);
+          }
+          _activeBotActions.delete(bot.name);
+          hideOverlay();
+        }
+
+        actionBar.append(modelLabel, modelSelect, restartBtn, stopBtn, confirmHolder);
+        card.append(header, stats, actionBar);
         return card;
       }));
     }
