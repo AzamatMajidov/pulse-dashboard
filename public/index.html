@@ -363,6 +363,97 @@
       font-family: 'JetBrains Mono', monospace;
     }
 
+    /* === ACTION BUTTONS (T23-T28) === */
+    .action-btn {
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: border-color 0.2s, color 0.2s;
+      padding: 0;
+      flex-shrink: 0;
+    }
+
+    .action-btn:hover {
+      border-color: var(--border-hover);
+      color: var(--cyan);
+    }
+
+    .action-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .confirm-text {
+      font-size: 12px;
+      color: var(--text-dim);
+      font-family: 'JetBrains Mono', monospace;
+      white-space: nowrap;
+    }
+
+    .confirm-btn {
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: none;
+      cursor: pointer;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: border-color 0.2s, color 0.2s, background 0.2s;
+      padding: 0;
+      flex-shrink: 0;
+    }
+
+    .confirm-yes { color: var(--green); }
+    .confirm-yes:hover { border-color: var(--green); background: var(--green-dim); }
+    .confirm-no { color: var(--red); }
+    .confirm-no:hover { border-color: var(--red); background: var(--red-dim); }
+
+    .row-spinner {
+      width: 14px;
+      height: 14px;
+      border: 2px solid var(--border);
+      border-top-color: var(--cyan);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      flex-shrink: 0;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: var(--bg3);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px 20px;
+      font-size: 13px;
+      font-family: 'JetBrains Mono', monospace;
+      z-index: 200;
+      opacity: 0;
+      transition: opacity 0.3s, transform 0.3s;
+      pointer-events: none;
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
     /* === BOT CARDS === */
     .bot-card {
       display: flex;
@@ -706,8 +797,26 @@
       el.classList.add('updated');
     }
 
-    // Build a service row safely (no innerHTML with user data)
-    function makeServiceRow(name, isOk, badge, uptime) {
+    // Track active restart actions to prevent re-render during confirmation/restart
+    const _activeActions = new Set();
+
+    // Toast notification
+    function showToast(message) {
+      let toast = document.getElementById('toast');
+      if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'toast';
+        document.body.appendChild(toast);
+      }
+      toast.textContent = message;
+      toast.className = 'toast show';
+      clearTimeout(toast._timer);
+      toast._timer = setTimeout(function() { toast.className = 'toast'; }, 3000);
+    }
+
+    // Build a service row safely (no innerHTML with server data)
+    // T23-T28: restart button, logs placeholder, inline confirmation, spinner, auto-refresh
+    function makeServiceRow(name, isOk, badge, uptime, type) {
       const row = document.createElement('div');
       row.className = 'service-row';
 
@@ -721,33 +830,117 @@
       left.append(dot, nameEl);
 
       const right = document.createElement('div');
-      right.style.cssText = 'display:flex;align-items:center;gap:10px';
-      const badgeEl = document.createElement('span');
-      badgeEl.className = 'service-badge ' + (isOk ? 'badge-green' : 'badge-red');
-      badgeEl.textContent = badge;
-      const uptimeEl = document.createElement('span');
-      uptimeEl.className = 'service-uptime';
-      uptimeEl.textContent = uptime || '';
-      right.append(badgeEl, uptimeEl);
+      right.style.cssText = 'display:flex;align-items:center;gap:8px';
 
+      var currentOk = isOk;
+      var currentBadge = badge;
+      var currentUptime = uptime;
+
+      function renderNormal() {
+        right.replaceChildren();
+        var badgeEl = document.createElement('span');
+        badgeEl.className = 'service-badge ' + (currentOk ? 'badge-green' : 'badge-red');
+        badgeEl.textContent = currentBadge;
+        var uptimeEl = document.createElement('span');
+        uptimeEl.className = 'service-uptime';
+        uptimeEl.textContent = currentUptime || '';
+        // T25 — Logs button placeholder
+        var logsBtn = document.createElement('button');
+        logsBtn.className = 'action-btn';
+        logsBtn.title = 'Logs';
+        logsBtn.textContent = '\uD83D\uDCCB';
+        logsBtn.onclick = function() { showToast('Live logs coming in Phase 4'); };
+        // T23/T24 — Restart button
+        var restartBtn = document.createElement('button');
+        restartBtn.className = 'action-btn';
+        restartBtn.title = 'Restart';
+        restartBtn.textContent = '\u27F3';
+        restartBtn.onclick = renderConfirm;
+        right.append(badgeEl, uptimeEl, logsBtn, restartBtn);
+      }
+
+      // T26 — Inline confirmation
+      function renderConfirm() {
+        _activeActions.add(name);
+        right.replaceChildren();
+        var text = document.createElement('span');
+        text.className = 'confirm-text';
+        text.textContent = 'Restart ' + name + '?';
+        var yesBtn = document.createElement('button');
+        yesBtn.className = 'confirm-btn confirm-yes';
+        yesBtn.title = 'Confirm';
+        yesBtn.textContent = '\u2713';
+        yesBtn.onclick = doRestart;
+        var noBtn = document.createElement('button');
+        noBtn.className = 'confirm-btn confirm-no';
+        noBtn.title = 'Cancel';
+        noBtn.textContent = '\u2717';
+        noBtn.onclick = function() { _activeActions.delete(name); renderNormal(); };
+        right.append(text, yesBtn, noBtn);
+      }
+
+      // T27 — Spinner during restart
+      function renderSpinner() {
+        right.replaceChildren();
+        var spinner = document.createElement('div');
+        spinner.className = 'row-spinner';
+        var text = document.createElement('span');
+        text.className = 'confirm-text';
+        text.textContent = 'Restarting\u2026';
+        right.append(spinner, text);
+      }
+
+      // T28 — Auto-refresh row status after restart
+      async function doRestart() {
+        renderSpinner();
+        try {
+          var endpoint = type === 'docker'
+            ? '/api/action/restart-docker'
+            : '/api/action/restart-service';
+          var res = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: name })
+          });
+          var data = await res.json();
+          if (data.ok) {
+            var newOk = type === 'docker' ? data.status === 'running' : data.status === 'active';
+            currentOk = newOk;
+            currentBadge = data.status;
+            currentUptime = newOk ? 'just now' : '';
+            dot.className = 'status-dot ' + (newOk ? 'online' : 'offline');
+            showToast(name + ' restarted \u2014 ' + data.status);
+          } else {
+            showToast('Failed: ' + (data.error || 'unknown error'));
+          }
+        } catch (err) {
+          showToast('Restart failed: ' + err.message);
+        }
+        _activeActions.delete(name);
+        renderNormal();
+      }
+
+      renderNormal();
       row.append(left, right);
       return row;
     }
 
-    // Render docker list
+    // Render docker list (skip if any container has an active action)
     function renderDocker(containers) {
+      if (containers.some(function(c) { return _activeActions.has(c.name); })) return;
       const list = document.getElementById('docker-list');
-      list.replaceChildren(...containers.map(c =>
-        makeServiceRow(c.name, c.running, c.running ? 'running' : 'stopped', c.uptime)
-      ));
+      list.replaceChildren(...containers.map(function(c) {
+        return makeServiceRow(c.name, c.running, c.running ? 'running' : 'stopped', c.uptime, 'docker');
+      }));
     }
 
-    // Render systemd list
+    // Render systemd list (skip if any service has an active action)
     function renderSystemd(services) {
+      if (services.some(function(s) { return _activeActions.has(s.name); })) return;
       const list = document.getElementById('systemd-list');
-      list.replaceChildren(...services.map(s =>
-        makeServiceRow(s.name, s.active, s.active ? 'active' : 'inactive', s.uptime)
-      ));
+      list.replaceChildren(...services.map(function(s) {
+        return makeServiceRow(s.name, s.active, s.active ? 'active' : 'inactive', s.uptime, 'service');
+      }));
     }
 
     // Render bots dynamically (XSS-safe: uses textContent only)

@@ -39,14 +39,14 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done
 
 ## Phase 2 — Service Restart Actions (F06)
 
-- [ ] T21 `POST /api/action/restart-service { name }` — runs `systemctl --user restart NAME`, returns new status
-- [ ] T22 `POST /api/action/restart-docker { name }` — runs `docker restart NAME`, returns new status
-- [ ] T23 Restart button `[⟳]` on each systemd service row — always visible, small
-- [ ] T24 Restart button `[⟳]` on each Docker container row — always visible, small
-- [ ] T25 "Logs" button `[📋]` placeholder on service rows (wired in F08)
-- [ ] T26 Inline confirmation — clicking `[⟳]` replaces it with `Restart X? [✓] [✗]`
-- [ ] T27 Spinner during restart — row shows spinner, disables buttons
-- [ ] T28 Auto-refresh row status after restart completes (re-fetch that service only)
+- [x] T21 `POST /api/action/restart-service { name }` — runs `systemctl --user restart NAME`, returns new status
+- [x] T22 `POST /api/action/restart-docker { name }` — runs `docker restart NAME`, returns new status
+- [x] T23 Restart button `[⟳]` on each systemd service row — always visible, small
+- [x] T24 Restart button `[⟳]` on each Docker container row — always visible, small
+- [x] T25 "Logs" button `[📋]` placeholder on service rows (wired in F08)
+- [x] T26 Inline confirmation — clicking `[⟳]` replaces it with `Restart X? [✓] [✗]`
+- [x] T27 Spinner during restart — row shows spinner, disables buttons
+- [x] T28 Auto-refresh row status after restart completes (re-fetch that service only)
 
 ---
 

@@ -689,6 +689,51 @@ app.post('/api/alerts/test', async (req, res) => {
   res.json({ ok, source: creds.source });
 });
 
+// T21 — POST /api/action/restart-service
+app.post('/api/action/restart-service', async (req, res) => {
+  try {
+    const { name } = req.body;
+    if (!name || typeof name !== 'string' || !/^[a-zA-Z0-9._@:-]+$/.test(name)) {
+      return res.status(400).json({ ok: false, error: 'Invalid service name' });
+    }
+    if (!CONFIG.systemdServices.includes(name)) {
+      return res.status(400).json({ ok: false, error: 'Unknown service' });
+    }
+    await run(`systemctl --user restart ${name}`, 10000);
+    await sleep(1500);
+    const status = await run(`systemctl --user is-active ${name}`);
+    res.json({ ok: true, name, status: status || 'unknown' });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// T22 — POST /api/action/restart-docker
+app.post('/api/action/restart-docker', async (req, res) => {
+  try {
+    const { name } = req.body;
+    if (!name || typeof name !== 'string' || !/^[a-zA-Z0-9._-]+$/.test(name)) {
+      return res.status(400).json({ ok: false, error: 'Invalid container name' });
+    }
+    let knownContainers;
+    if (CONFIG.dockerContainers === 'auto') {
+      const out = await run('docker ps -a --format "{{.Names}}"');
+      knownContainers = out.split('\n').filter(Boolean);
+    } else {
+      knownContainers = CONFIG.dockerContainers;
+    }
+    if (!knownContainers.includes(name)) {
+      return res.status(400).json({ ok: false, error: 'Unknown container' });
+    }
+    await run(`docker restart ${name}`, 15000);
+    await sleep(1500);
+    const status = await run(`docker inspect --format '{{.State.Status}}' ${name}`);
+    res.json({ ok: true, name, status: status || 'unknown' });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 // --- Setup + Settings page ---
 app.get('/setup', (req, res) => res.sendFile(path.join(__dirname, 'public', 'setup.html')));
 app.get('/settings', (req, res) => res.sendFile(path.join(__dirname, 'public', 'setup.html')));
