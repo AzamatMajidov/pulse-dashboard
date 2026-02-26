@@ -456,6 +456,45 @@
       transform: translateX(-50%) translateY(0);
     }
 
+    /* T71 — License tier badge */
+    .tier-badge {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 20px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      font-family: 'Inter', sans-serif;
+    }
+    .tier-badge.free {
+      background: var(--bg3);
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+    }
+    .tier-badge.pro {
+      background: var(--green-dim);
+      color: var(--green);
+      border: 1px solid var(--green);
+    }
+
+    /* Lock overlay for pro-gated buttons */
+    .pro-locked {
+      position: relative;
+      pointer-events: none;
+      opacity: 0.4;
+    }
+    .pro-locked::after {
+      content: '🔒';
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      pointer-events: auto;
+      cursor: pointer;
+    }
+
     /* === BOT CARDS === */
     .bot-card {
       display: flex;
@@ -1001,6 +1040,7 @@
             <div class="weather-desc" id="weather-desc">--</div>
           </div>
         </div>
+        <span class="tier-badge free" id="tier-badge" style="margin-left:12px;display:none">Free</span>
         <div style="position:relative;margin-left:12px" id="alert-bell-wrap">
           <button id="alert-bell" onclick="toggleAlertDropdown()" title="Alerts" style="display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:8px;border:1px solid var(--border);color:var(--text-muted);background:none;cursor:pointer;font-size:16px;transition:border-color 0.2s,color 0.2s;position:relative" onmouseover="this.style.borderColor='var(--border-hover)';this.style.color='var(--cyan)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-muted)'">🔔
             <span id="alert-badge" style="display:none;position:absolute;top:-5px;right:-5px;background:#f87171;color:#000;font-size:10px;font-weight:700;min-width:16px;height:16px;border-radius:8px;display:none;align-items:center;justify-content:center;padding:0 3px;font-family:'Inter',sans-serif">0</span>
@@ -1237,13 +1277,23 @@
         logsBtn.className = 'action-btn';
         logsBtn.title = 'Logs';
         logsBtn.textContent = '\uD83D\uDCCB';
-        logsBtn.onclick = function() { openLogDrawer(name, type); };
+        if (!_isProTier) {
+          logsBtn.classList.add('pro-locked');
+          logsBtn.onclick = proGateClick;
+        } else {
+          logsBtn.onclick = function() { openLogDrawer(name, type); };
+        }
         // T23/T24 — Restart button
         var restartBtn = document.createElement('button');
         restartBtn.className = 'action-btn';
         restartBtn.title = 'Restart';
         restartBtn.textContent = '\u27F3';
-        restartBtn.onclick = renderConfirm;
+        if (!_isProTier) {
+          restartBtn.classList.add('pro-locked');
+          restartBtn.onclick = proGateClick;
+        } else {
+          restartBtn.onclick = renderConfirm;
+        }
         right.append(badgeEl, uptimeEl, logsBtn, restartBtn);
       }
 
@@ -1428,7 +1478,12 @@
           });
         }
 
+        if (!_isProTier) {
+          modelSelect.disabled = true;
+          modelSelect.title = 'Pro feature';
+        }
         modelSelect.onchange = async function() {
+          if (!_isProTier) { proGateClick(event); return; }
           var selectedModel = modelSelect.value;
           if (!selectedModel) return;
           _activeBotActions.add(bot.name);
@@ -1495,8 +1550,15 @@
           stopBtn.style.display = '';
         }
 
-        restartBtn.onclick = function() { showConfirm('Restart', 'restart'); };
-        stopBtn.onclick = function() { showConfirm('Stop', 'stop'); };
+        if (!_isProTier) {
+          restartBtn.classList.add('pro-locked');
+          restartBtn.onclick = proGateClick;
+          stopBtn.classList.add('pro-locked');
+          stopBtn.onclick = proGateClick;
+        } else {
+          restartBtn.onclick = function() { showConfirm('Restart', 'restart'); };
+          stopBtn.onclick = function() { showConfirm('Stop', 'stop'); };
+        }
 
         // T36 — Spinner overlay
         var overlay = null;
@@ -2111,6 +2173,7 @@
     let alertDropdownOpen = false;
 
     function toggleAlertDropdown() {
+      if (!_isProTier) { showToast('Pro feature \u2014 enter license key in Settings'); return; }
       alertDropdownOpen = !alertDropdownOpen;
       document.getElementById('alert-dropdown').style.display = alertDropdownOpen ? 'block' : 'none';
       if (alertDropdownOpen) fetchAlertStatus();
@@ -2172,6 +2235,41 @@
     // Poll alert status every 30s
     fetchAlertStatus();
     setInterval(fetchAlertStatus, 30000);
+
+    // --- T71: License Pro Gate ---
+    let _isProTier = false;
+
+    async function fetchLicenseStatus() {
+      try {
+        const res = await fetch('/api/license/status');
+        const data = await res.json();
+        const badge = document.getElementById('tier-badge');
+        _isProTier = data.valid && data.tier === 'pro';
+        badge.style.display = 'inline-block';
+        if (_isProTier) {
+          badge.textContent = 'Pro';
+          badge.className = 'tier-badge pro';
+        } else {
+          badge.textContent = 'Free';
+          badge.className = 'tier-badge free';
+        }
+        applyProGate();
+      } catch {}
+    }
+
+    function applyProGate() {
+      // Lock/unlock pro-gated action buttons based on tier
+      // Restart + logs buttons in service rows, alert bell, bot action bar controls
+      // These are re-applied after each metrics render, so we hook into the render cycle
+    }
+
+    function proGateClick(e) {
+      e.stopPropagation();
+      e.preventDefault();
+      showToast('Pro feature \u2014 enter license key in Settings');
+    }
+
+    fetchLicenseStatus();
   </script>
 </body>
 </html>

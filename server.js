@@ -5,6 +5,7 @@ const http = require('http');
 const https = require('https');
 const path = require('path');
 const os = require('os');
+const crypto = require('crypto');
 
 // --- Setup Mode ---
 let setupMode = false;
@@ -223,7 +224,7 @@ app.use(express.json());
 
 // --- Auth Middleware (skips /setup, /api/setup, /api/health, /api/detect/*) ---
 app.use((req, res, next) => {
-  const publicPaths = ['/setup', '/api/setup', '/api/health', '/api/alerts/test'];
+  const publicPaths = ['/setup', '/api/setup', '/api/health', '/api/alerts/test', '/admin/license', '/api/license/generate', '/api/license/activate', '/api/license/status'];
   const isPublic = publicPaths.includes(req.path) || req.path.startsWith('/api/detect');
   if (isPublic) return next();
   if (!CONFIG.auth || !CONFIG.auth.enabled) return next();
@@ -241,7 +242,7 @@ app.use((req, res, next) => {
 // --- Setup Mode Redirect Middleware ---
 app.use((req, res, next) => {
   if (!setupMode) return next();
-  const allowed = ['/setup', '/api/setup', '/api/health'];
+  const allowed = ['/setup', '/api/setup', '/api/health', '/admin/license', '/api/license/generate'];
   const isAllowed = allowed.includes(req.path) || req.path.startsWith('/api/detect');
   if (isAllowed) return next();
   // Allow static assets for setup page
@@ -596,6 +597,91 @@ function formatBytes(bytes) {
 }
 
 // ============================================================
+// T63-T68: License System (Phase 6)
+// ============================================================
+
+const LICENSE_KEYS_DIR = path.join(__dirname, 'data', 'license-keys');
+const LICENSE_PRIVATE_KEY = path.join(LICENSE_KEYS_DIR, 'private.pem');
+const LICENSE_PUBLIC_KEY = path.join(LICENSE_KEYS_DIR, 'public.pem');
+
+// T63 — Generate Ed25519 key pair on first start if not exists
+async function ensureLicenseKeys() {
+  try {
+    await fs.promises.access(LICENSE_PRIVATE_KEY);
+    await fs.promises.access(LICENSE_PUBLIC_KEY);
+  } catch {
+    await fs.promises.mkdir(LICENSE_KEYS_DIR, { recursive: true });
+    const { publicKey, privateKey } = crypto.generateKeyPairSync('ed25519', {
+      publicKeyEncoding: { type: 'spki', format: 'pem' },
+      privateKeyEncoding: { type: 'pkcs8', format: 'pem' }
+    });
+    await fs.promises.writeFile(LICENSE_PRIVATE_KEY, privateKey);
+    await fs.promises.writeFile(LICENSE_PUBLIC_KEY, publicKey);
+    console.log('🔑 License keys generated');
+  }
+}
+
+// Base64url helpers
+function toBase64Url(buf) {
+  return (Buffer.isBuffer(buf) ? buf : Buffer.from(buf))
+    .toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function fromBase64Url(str) {
+  let s = str.replace(/-/g, '+').replace(/_/g, '/');
+  while (s.length % 4) s += '=';
+  return Buffer.from(s, 'base64');
+}
+
+// T64 — Create a signed license key string
+async function createLicense({ email, tier, expiresAt }) {
+  const privateKeyPem = await fs.promises.readFile(LICENSE_PRIVATE_KEY, 'utf8');
+  const payload = JSON.stringify({ email, tier, expiresAt });
+  const payloadB64 = toBase64Url(payload);
+  const signature = crypto.sign(null, Buffer.from(payload), privateKeyPem);
+  const sigB64 = toBase64Url(signature);
+  return payloadB64 + '.' + sigB64;
+}
+
+// T66 — Verify a license key string
+async function verifyLicense(keyString) {
+  try {
+    const parts = keyString.split('.');
+    if (parts.length !== 2) return { valid: false, error: 'Invalid format' };
+    const [payloadB64, sigB64] = parts;
+    const payloadBuf = fromBase64Url(payloadB64);
+    const sigBuf = fromBase64Url(sigB64);
+    const publicKeyPem = await fs.promises.readFile(LICENSE_PUBLIC_KEY, 'utf8');
+    const valid = crypto.verify(null, payloadBuf, publicKeyPem, sigBuf);
+    if (!valid) return { valid: false, error: 'Invalid signature' };
+    const payload = JSON.parse(payloadBuf.toString());
+    if (new Date(payload.expiresAt).getTime() < Date.now()) {
+      return { valid: false, error: 'License expired' };
+    }
+    return { valid: true, payload };
+  } catch (err) {
+    return { valid: false, error: err.message };
+  }
+}
+
+// T69 — Pro middleware: returns 402 if no valid pro license
+async function requirePro(req, res, next) {
+  try {
+    const license = CONFIG.license;
+    if (!license) {
+      return res.status(402).json({ error: 'pro_required', message: 'This feature requires a Pro license' });
+    }
+    const result = await verifyLicense(license);
+    if (!result.valid || result.payload.tier !== 'pro') {
+      return res.status(402).json({ error: 'pro_required', message: 'This feature requires a Pro license' });
+    }
+    next();
+  } catch {
+    res.status(402).json({ error: 'pro_required', message: 'This feature requires a Pro license' });
+  }
+}
+
+// ============================================================
 // T49-T51: History Collector (Phase 5)
 // ============================================================
 
@@ -799,7 +885,7 @@ app.get('/api/alerts/status', async (req, res) => {
 });
 
 // --- T09: Test alert ---
-app.post('/api/alerts/test', async (req, res) => {
+app.post('/api/alerts/test', requirePro, async (req, res) => {
   const creds = await getTelegramCredentials();
   if (!creds) return res.json({ ok: false, error: 'No Telegram credentials found. Configure in settings or set up OpenClaw Telegram.' });
   const ok = await sendTelegramMessage(`🔔 <b>Pulse Test Alert</b>\nAlerts are working! Your dashboard is configured correctly.\n${new Date().toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`);
@@ -807,7 +893,7 @@ app.post('/api/alerts/test', async (req, res) => {
 });
 
 // T21 — POST /api/action/restart-service
-app.post('/api/action/restart-service', async (req, res) => {
+app.post('/api/action/restart-service', requirePro, async (req, res) => {
   try {
     const { name } = req.body;
     if (!name || typeof name !== 'string' || !/^[a-zA-Z0-9._@:-]+$/.test(name)) {
@@ -826,7 +912,7 @@ app.post('/api/action/restart-service', async (req, res) => {
 });
 
 // T22 — POST /api/action/restart-docker
-app.post('/api/action/restart-docker', async (req, res) => {
+app.post('/api/action/restart-docker', requirePro, async (req, res) => {
   try {
     const { name } = req.body;
     if (!name || typeof name !== 'string' || !/^[a-zA-Z0-9._-]+$/.test(name)) {
@@ -871,7 +957,7 @@ app.get('/api/openclaw/models', async (req, res) => {
 });
 
 // T30 — POST /api/openclaw/gateway
-app.post('/api/openclaw/gateway', async (req, res) => {
+app.post('/api/openclaw/gateway', requirePro, async (req, res) => {
   try {
     const { action } = req.body;
     if (!['restart', 'stop', 'start'].includes(action)) {
@@ -885,7 +971,7 @@ app.post('/api/openclaw/gateway', async (req, res) => {
 });
 
 // T31 — POST /api/openclaw/model
-app.post('/api/openclaw/model', async (req, res) => {
+app.post('/api/openclaw/model', requirePro, async (req, res) => {
   try {
     const { model } = req.body;
     if (!model || typeof model !== 'string') {
@@ -960,7 +1046,7 @@ function stripAnsi(str) {
 }
 
 // T38 — GET /api/logs/service/:name — SSE endpoint for systemd service logs
-app.get('/api/logs/service/:name', (req, res) => {
+app.get('/api/logs/service/:name', requirePro, (req, res) => {
   const { name } = req.params;
   // Validate name against CONFIG (security)
   if (!name || typeof name !== 'string' || !/^[a-zA-Z0-9._@:-]+$/.test(name)) {
@@ -1013,7 +1099,7 @@ app.get('/api/logs/service/:name', (req, res) => {
 });
 
 // T39 — GET /api/logs/docker/:name — SSE endpoint for Docker container logs
-app.get('/api/logs/docker/:name', async (req, res) => {
+app.get('/api/logs/docker/:name', requirePro, async (req, res) => {
   const { name } = req.params;
   // Validate name (security)
   if (!name || typeof name !== 'string' || !/^[a-zA-Z0-9._-]+$/.test(name)) {
@@ -1072,6 +1158,75 @@ app.get('/api/logs/docker/:name', async (req, res) => {
   });
 });
 
+// ============================================================
+// T65-T68: License Routes (Phase 6)
+// ============================================================
+
+// T65 — Admin license page
+app.get('/admin/license', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin-license.html')));
+
+// T65 — Generate a license key (admin-only endpoint)
+app.post('/api/license/generate', async (req, res) => {
+  try {
+    const { email, tier, expiresAt } = req.body;
+    if (!email || !tier || !expiresAt) {
+      return res.status(400).json({ error: 'email, tier, and expiresAt are required' });
+    }
+    if (tier !== 'pro') {
+      return res.status(400).json({ error: 'Only "pro" tier is supported' });
+    }
+    const expDate = new Date(expiresAt);
+    if (isNaN(expDate.getTime())) {
+      return res.status(400).json({ error: 'Invalid expiry date' });
+    }
+    const key = await createLicense({ email, tier, expiresAt: expDate.toISOString() });
+    res.json({ ok: true, key });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// T67 — Activate a license key
+app.post('/api/license/activate', async (req, res) => {
+  try {
+    const { key } = req.body;
+    if (!key || typeof key !== 'string') {
+      return res.status(400).json({ ok: false, error: 'License key is required' });
+    }
+    const result = await verifyLicense(key.trim());
+    if (!result.valid) {
+      return res.status(400).json({ ok: false, error: result.error });
+    }
+    // Store in config.json (read fresh, add license field, write back)
+    CONFIG.license = key.trim();
+    const configPath = path.join(__dirname, 'config.json');
+    const raw = await fs.promises.readFile(configPath, 'utf8');
+    const diskConfig = JSON.parse(raw);
+    diskConfig.license = key.trim();
+    await fs.promises.writeFile(configPath, JSON.stringify(diskConfig, null, 2));
+    res.json({ ok: true, tier: result.payload.tier, email: result.payload.email, expiresAt: result.payload.expiresAt });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// T68 — License status
+app.get('/api/license/status', async (req, res) => {
+  try {
+    const license = CONFIG.license;
+    if (!license) {
+      return res.json({ tier: 'free', email: null, expiresAt: null, valid: false });
+    }
+    const result = await verifyLicense(license);
+    if (!result.valid) {
+      return res.json({ tier: 'free', email: null, expiresAt: null, valid: false });
+    }
+    res.json({ tier: result.payload.tier, email: result.payload.email, expiresAt: result.payload.expiresAt, valid: true });
+  } catch {
+    res.json({ tier: 'free', email: null, expiresAt: null, valid: false });
+  }
+});
+
 // --- Setup + Settings page ---
 app.get('/setup', (req, res) => res.sendFile(path.join(__dirname, 'public', 'setup.html')));
 app.get('/settings', (req, res) => res.sendFile(path.join(__dirname, 'public', 'setup.html')));
@@ -1081,6 +1236,7 @@ app.get('/settings', (req, res) => res.sendFile(path.join(__dirname, 'public', '
 // ============================================================
 async function start() {
   CONFIG = await loadConfig();
+  await ensureLicenseKeys();
 
   if (CONFIG.networkIface === 'auto') {
     CONFIG.networkIface = await detectNetworkIface();

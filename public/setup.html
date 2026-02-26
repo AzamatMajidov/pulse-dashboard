@@ -703,6 +703,32 @@
     </div>
   </div>
 
+  <!-- License (collapsible) -->
+  <div class="card">
+    <div class="collapsible-header" onclick="toggleLicense()">
+      <div class="card-title" style="margin-bottom:0">License</div>
+      <div class="collapsible-arrow" id="license-arrow">▶</div>
+    </div>
+    <div class="collapsible-body" id="license-body">
+      <div class="collapsible-divider">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+          <span style="font-size:13px;color:var(--text-dim)">Current tier:</span>
+          <span id="license-tier-badge" style="font-size:12px;font-weight:600;padding:2px 10px;border-radius:20px;background:#22d3ee15;color:var(--text-muted)">Free</span>
+        </div>
+        <div id="license-info" style="display:none;margin-bottom:16px">
+          <div style="font-size:13px;color:var(--text-dim);margin-bottom:4px">Email: <span id="license-email" style="color:var(--text)">—</span></div>
+          <div style="font-size:13px;color:var(--text-dim)">Expires: <span id="license-expiry" style="color:var(--text)">—</span></div>
+        </div>
+        <div class="field">
+          <label for="license-key-input">License Key</label>
+          <input type="text" id="license-key-input" placeholder="Paste your license key here" style="font-family:'JetBrains Mono',monospace;font-size:12px" />
+        </div>
+        <button class="btn-test" id="license-activate-btn" onclick="activateLicense()">Activate</button>
+        <div class="test-result" id="license-result"></div>
+      </div>
+    </div>
+  </div>
+
   <!-- Bots (collapsible) -->
   <div class="card">
     <div class="collapsible-header" onclick="toggleBots()">
@@ -1098,6 +1124,68 @@
       if (opt?.hasName) rule.name = inputs[2].value.trim();
       return rule;
     }).filter(r => r.metric);
+  }
+
+  // --- License ---
+  function toggleLicense() {
+    const body = document.getElementById('license-body');
+    const arrow = document.getElementById('license-arrow');
+    const open = body.classList.toggle('open');
+    arrow.textContent = open ? '▼' : '▶';
+    if (open) fetchLicenseStatus();
+  }
+
+  async function fetchLicenseStatus() {
+    try {
+      const res = await fetch('/api/license/status');
+      const data = await res.json();
+      const badge = document.getElementById('license-tier-badge');
+      const info = document.getElementById('license-info');
+      if (data.valid && data.tier === 'pro') {
+        badge.textContent = 'Pro';
+        badge.style.background = '#4ade8020';
+        badge.style.color = '#4ade80';
+        info.style.display = 'block';
+        document.getElementById('license-email').textContent = data.email || '—';
+        document.getElementById('license-expiry').textContent = data.expiresAt ? new Date(data.expiresAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : '—';
+      } else {
+        badge.textContent = 'Free';
+        badge.style.background = '#22d3ee15';
+        badge.style.color = 'var(--text-muted)';
+        info.style.display = 'none';
+      }
+    } catch {}
+  }
+
+  async function activateLicense() {
+    const key = document.getElementById('license-key-input').value.trim();
+    const resultEl = document.getElementById('license-result');
+    if (!key) {
+      resultEl.textContent = 'Please enter a license key';
+      resultEl.className = 'test-result err';
+      return;
+    }
+    resultEl.textContent = 'Activating...';
+    resultEl.className = 'test-result';
+    try {
+      const res = await fetch('/api/license/activate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key })
+      });
+      const data = await res.json();
+      if (data.ok) {
+        resultEl.textContent = '✅ License activated! Tier: ' + data.tier + ', expires ' + new Date(data.expiresAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+        resultEl.className = 'test-result ok';
+        fetchLicenseStatus();
+      } else {
+        resultEl.textContent = '❌ ' + (data.error || 'Activation failed');
+        resultEl.className = 'test-result err';
+      }
+    } catch (e) {
+      resultEl.textContent = '❌ Network error';
+      resultEl.className = 'test-result err';
+    }
   }
 
   // --- Save ---

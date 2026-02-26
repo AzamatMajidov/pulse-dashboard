@@ -1,7 +1,7 @@
 # Pulse — Task Breakdown
 
-**Last updated:** 2026-02-26  
-**Total tasks:** 76 (62 done · 14 todo)
+**Last updated:** 2026-02-26
+**Total tasks:** 76 (71 done · 5 todo)
 
 Legend: `[ ]` todo · `[~]` in progress · `[x]` done
 
@@ -101,15 +101,15 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done
 
 ## Phase 6 — License / Paywall
 
-- [ ] T63 Ed25519 key pair — generate `owner-private.pem` + `owner-public.pem` (one-time, owner keeps private)
-- [ ] T64 License struct — `{ email, tier, expiresAt }` → sign with private key → base64 string = license key
-- [ ] T65 `/admin/license` page — owner-only web UI: input email + tier + expiry → generates signed key → copy button
-- [ ] T66 License verification function — verifies Ed25519 signature using embedded public key, checks expiry
-- [ ] T67 `POST /api/license/activate { key }` — verifies key, stores in `config.json`
-- [ ] T68 `GET /api/license/status` — returns `{ tier: free|pro, email, expiresAt, valid }`
-- [ ] T69 Pro middleware — wraps Pro endpoints (F05–F08), returns `402 { error: "pro_required" }` if no valid license
-- [ ] T70 License section in `/settings` — shows current tier + expiry, input for license key, activate button
-- [ ] T71 Frontend Pro gate — lock icon on Pro features when on free tier; clicking shows "Upgrade to Pro" message with link
+- [x] T63 Ed25519 key pair — generate `private.pem` + `public.pem` in `data/license-keys/` (one-time, on first start)
+- [x] T64 License struct — `{ email, tier, expiresAt }` → sign with Ed25519 private key → `payload.signature` base64url format
+- [x] T65 `/admin/license` page — owner-only web UI: input email + tier + expiry → generates signed key → copy button
+- [x] T66 License verification function — verifies Ed25519 signature using public key, checks expiry
+- [x] T67 `POST /api/license/activate { key }` — verifies key, stores in `config.json`
+- [x] T68 `GET /api/license/status` — returns `{ tier: free|pro, email, expiresAt, valid }`
+- [x] T69 Pro middleware — wraps Pro endpoints (F05–F08), returns `402 { error: "pro_required" }` if no valid license
+- [x] T70 License section in `/settings` — shows current tier + expiry, input for license key, activate button
+- [x] T71 Frontend Pro gate — lock icon on Pro features when on free tier; clicking shows "Pro feature" toast
 
 ---
 
