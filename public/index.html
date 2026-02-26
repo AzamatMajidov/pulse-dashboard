@@ -1120,7 +1120,7 @@
         <div class="action-pill" id="alert-bell-wrap">
           <button class="pill-btn" id="alert-bell" onclick="toggleAlertDropdown()" title="Alerts">
             🔔
-            <span class="tier-dot" id="tier-dot" style="display:none"></span>
+
             <span id="alert-badge" style="display:none;position:absolute;top:0;right:0;background:#f87171;color:#000;font-size:9px;font-weight:700;min-width:14px;height:14px;border-radius:7px;align-items:center;justify-content:center;padding:0 2px;font-family:'Inter',sans-serif">0</span>
           </button>
           <div class="pill-divider"></div>
@@ -1244,6 +1244,7 @@
         Auto-refresh every 10s
       </div>
       <div class="last-updated" id="last-updated">--</div>
+      <a href="https://buymeacoffee.com/azamatmajidov" target="_blank" style="display:flex;align-items:center;gap:6px;color:var(--text-muted);text-decoration:none;font-size:12px;transition:color 0.2s" onmouseover="this.style.color='#ffdd00'" onmouseout="this.style.color='var(--text-muted)'">☕ Buy me a coffee</a>
     </div>
 
   </div>
@@ -2374,24 +2375,13 @@
     setInterval(fetchAlertStatus, 30000);
 
     // --- T71: License Pro Gate ---
-    let _isProTier = false;
+    let _isProTier = true;
 
     async function fetchLicenseStatus() {
       try {
-        const res = await fetch('/api/license/status');
-        const data = await res.json();
-        const dot = document.getElementById('tier-dot');
-        _isProTier = data.valid && data.tier === 'pro';
-        dot.style.display = 'block';
-        if (_isProTier) {
-          dot.className = 'tier-dot pro';
-        } else {
-          dot.className = 'tier-dot free';
-          // Make bell click show upgrade modal on free tier
-          var bell = document.getElementById('alert-bell');
-          var origClick = bell.onclick;
-          bell.onclick = function(e) { showUpgradeModal(); };
-        }
+        _isProTier = true;
+        var dot = document.getElementById('tier-dot');
+        if (dot) dot.style.display = 'none';
         applyProGate();
       } catch {}
     }

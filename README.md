@@ -134,23 +134,10 @@ MIT
 
 ---
 
-## Pro
+## Support
 
-Pulse is free for basic monitoring. **Pro** unlocks the full toolkit:
+Pulse is **free and open source** — all features included, no paywalls.
 
-| Feature | Free | Pro |
-|---------|:----:|:---:|
-| System metrics (CPU, RAM, Disk, Network) | ✅ | ✅ |
-| Weather widget | ✅ | ✅ |
-| Bot status cards | ✅ | ✅ |
-| Historical charts & sparklines | ✅ | ✅ |
-| Telegram alerts | ❌ | ✅ |
-| Service & Docker restart | ❌ | ✅ |
-| Gateway controls & model switch | ❌ | ✅ |
-| Live log tail | ❌ | ✅ |
+If you find it useful, consider buying me a coffee ☕
 
-**Pricing:** $3/mo or $19/yr (save 47%)
-
-To get a license key, reach out: **azamat.z.majidov@gmail.com**
-
-Activate in Settings → License → paste your key → done.
+<a href="https://buymeacoffee.com/azamatmajidov" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="40"></a>

@@ -975,7 +975,7 @@ app.get('/api/alerts/status', async (req, res) => {
 });
 
 // --- T09: Test alert ---
-app.post('/api/alerts/test', requirePro, async (req, res) => {
+app.post('/api/alerts/test', async (req, res) => {
   const creds = await getTelegramCredentials();
   if (!creds) return res.json({ ok: false, error: 'No Telegram credentials found. Configure in settings or set up OpenClaw Telegram.' });
   const ok = await sendTelegramMessage(`🔔 <b>Pulse Test Alert</b>\nAlerts are working! Your dashboard is configured correctly.\n${new Date().toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`);
@@ -983,7 +983,7 @@ app.post('/api/alerts/test', requirePro, async (req, res) => {
 });
 
 // T21 — POST /api/action/restart-service
-app.post('/api/action/restart-service', requirePro, async (req, res) => {
+app.post('/api/action/restart-service', async (req, res) => {
   try {
     const { name } = req.body;
     if (!name || typeof name !== 'string' || !/^[a-zA-Z0-9._@:-]+$/.test(name)) {
@@ -1002,7 +1002,7 @@ app.post('/api/action/restart-service', requirePro, async (req, res) => {
 });
 
 // T22 — POST /api/action/restart-docker
-app.post('/api/action/restart-docker', requirePro, async (req, res) => {
+app.post('/api/action/restart-docker', async (req, res) => {
   try {
     const { name } = req.body;
     if (!name || typeof name !== 'string' || !/^[a-zA-Z0-9._-]+$/.test(name)) {
@@ -1047,7 +1047,7 @@ app.get('/api/openclaw/models', async (req, res) => {
 });
 
 // T30 — POST /api/openclaw/gateway
-app.post('/api/openclaw/gateway', requirePro, async (req, res) => {
+app.post('/api/openclaw/gateway', async (req, res) => {
   try {
     const { action } = req.body;
     if (!['restart', 'stop', 'start'].includes(action)) {
@@ -1061,7 +1061,7 @@ app.post('/api/openclaw/gateway', requirePro, async (req, res) => {
 });
 
 // T31 — POST /api/openclaw/model
-app.post('/api/openclaw/model', requirePro, async (req, res) => {
+app.post('/api/openclaw/model', async (req, res) => {
   try {
     const { model } = req.body;
     if (!model || typeof model !== 'string') {
@@ -1136,7 +1136,7 @@ function stripAnsi(str) {
 }
 
 // T38 — GET /api/logs/service/:name — SSE endpoint for systemd service logs
-app.get('/api/logs/service/:name', requirePro, (req, res) => {
+app.get('/api/logs/service/:name', (req, res) => {
   const { name } = req.params;
   // Validate name against CONFIG (security)
   if (!name || typeof name !== 'string' || !/^[a-zA-Z0-9._@:-]+$/.test(name)) {
@@ -1189,7 +1189,7 @@ app.get('/api/logs/service/:name', requirePro, (req, res) => {
 });
 
 // T39 — GET /api/logs/docker/:name — SSE endpoint for Docker container logs
-app.get('/api/logs/docker/:name', requirePro, async (req, res) => {
+app.get('/api/logs/docker/:name', async (req, res) => {
   const { name } = req.params;
   // Validate name (security)
   if (!name || typeof name !== 'string' || !/^[a-zA-Z0-9._-]+$/.test(name)) {
