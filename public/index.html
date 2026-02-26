@@ -2252,6 +2252,8 @@
         } else {
           badge.textContent = 'Free';
           badge.className = 'tier-badge free';
+          badge.style.cursor = 'pointer';
+          badge.onclick = showUpgradeModal;
         }
         applyProGate();
       } catch {}
@@ -2266,7 +2268,50 @@
     function proGateClick(e) {
       e.stopPropagation();
       e.preventDefault();
-      showToast('Pro feature \u2014 enter license key in Settings');
+      showUpgradeModal();
+    }
+
+    function showUpgradeModal() {
+      if (document.getElementById('upgrade-modal-overlay')) {
+        document.getElementById('upgrade-modal-overlay').classList.add('open');
+        return;
+      }
+      var overlay = document.createElement('div');
+      overlay.id = 'upgrade-modal-overlay';
+      overlay.className = 'chart-modal-overlay open';
+      overlay.onclick = function(e) { if (e.target === overlay) overlay.classList.remove('open'); };
+
+      var modal = document.createElement('div');
+      modal.className = 'chart-modal';
+      modal.style.maxWidth = '480px';
+      modal.style.textAlign = 'center';
+      modal.style.padding = '32px';
+      modal.innerHTML = '<div style="font-size:36px;margin-bottom:16px">\uD83D\uDD13</div>'
+        + '<div style="font-size:18px;font-weight:600;color:var(--text);margin-bottom:8px">Upgrade to Pro</div>'
+        + '<div style="color:var(--text-muted);font-size:13px;margin-bottom:20px;line-height:1.6">'
+        + 'Unlock Telegram alerts, service restarts, gateway controls, live logs, and model switching.'
+        + '</div>'
+        + '<div style="display:flex;gap:12px;justify-content:center;margin-bottom:20px">'
+        + '<div style="background:var(--cyan-dim);border:1px solid var(--cyan);border-radius:8px;padding:12px 20px">'
+        + '<div style="color:var(--cyan);font-size:20px;font-weight:700">$7<span style="font-size:12px;font-weight:400">/mo</span></div>'
+        + '</div>'
+        + '<div style="background:var(--cyan-dim);border:1px solid var(--cyan);border-radius:8px;padding:12px 20px">'
+        + '<div style="color:var(--cyan);font-size:20px;font-weight:700">$49<span style="font-size:12px;font-weight:400">/yr</span></div>'
+        + '<div style="color:var(--text-muted);font-size:10px">Save 42%</div>'
+        + '</div>'
+        + '</div>'
+        + '<a href="https://github.com/AzamatMajidov/pulse-dashboard#pro" target="_blank" '
+        + 'style="display:inline-block;background:var(--cyan);color:#000;font-weight:600;padding:10px 28px;border-radius:8px;text-decoration:none;font-size:14px;margin-bottom:12px">'
+        + 'Get Pro \u2192</a>'
+        + '<div style="color:var(--text-muted);font-size:11px">Or enter your license key in <a href="/settings" style="color:var(--cyan)">Settings</a></div>';
+
+      var closeBtn = document.createElement('button');
+      closeBtn.className = 'chart-close-btn';
+      closeBtn.textContent = '\u00D7';
+      closeBtn.onclick = function() { overlay.classList.remove('open'); };
+      modal.appendChild(closeBtn);
+      overlay.appendChild(modal);
+      document.body.appendChild(overlay);
     }
 
     fetchLicenseStatus();

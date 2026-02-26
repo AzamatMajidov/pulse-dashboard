@@ -131,3 +131,26 @@ systemctl --user stop pulse
 ## License
 
 MIT
+
+---
+
+## Pro
+
+Pulse is free for basic monitoring. **Pro** unlocks the full toolkit:
+
+| Feature | Free | Pro |
+|---------|:----:|:---:|
+| System metrics (CPU, RAM, Disk, Network) | ✅ | ✅ |
+| Weather widget | ✅ | ✅ |
+| Bot status cards | ✅ | ✅ |
+| Historical charts & sparklines | ✅ | ✅ |
+| Telegram alerts | ❌ | ✅ |
+| Service & Docker restart | ❌ | ✅ |
+| Gateway controls & model switch | ❌ | ✅ |
+| Live log tail | ❌ | ✅ |
+
+**Pricing:** $7/mo or $49/yr (save 42%)
+
+To get a license key, reach out: **azamat.z.majidov@gmail.com**
+
+Activate in Settings → License → paste your key → done.
