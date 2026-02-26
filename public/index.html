@@ -702,7 +702,10 @@
     }
 
     .log-drawer.maximized {
-      height: 100vh;
+      height: auto;
+      top: 0;
+      bottom: 0;
+      border-radius: 0;
     }
 
     .log-drawer-header {
@@ -842,27 +845,52 @@
       padding: 8px 0;
     }
 
-    /* Expanded card state */
-    .card.expanded {
-      grid-column: 1 / -1;
-      z-index: 10;
+    /* Chart modal overlay */
+    .chart-modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.6);
+      z-index: 500;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      backdrop-filter: blur(4px);
     }
 
-    .expanded-chart-wrap {
-      margin-top: 16px;
+    .chart-modal-overlay.open {
+      display: flex;
+    }
+
+    .chart-modal {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+      width: 100%;
+      max-width: 900px;
+      max-height: 90vh;
       position: relative;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
     }
 
-    .expanded-chart-wrap canvas {
+    .chart-modal-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 16px;
+    }
+
+    .chart-modal canvas {
       display: block;
       width: 100% !important;
-      height: 220px !important;
+      height: 280px !important;
     }
 
     .chart-time-tabs {
       display: flex;
       gap: 4px;
-      margin-bottom: 10px;
+      margin-bottom: 14px;
     }
 
     .chart-time-tab {
@@ -890,16 +918,16 @@
 
     .chart-close-btn {
       position: absolute;
-      top: 0;
-      right: 0;
-      width: 32px;
-      height: 32px;
-      border-radius: 6px;
+      top: 16px;
+      right: 16px;
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
       border: 1px solid var(--border);
       background: rgba(255,255,255,0.06);
       color: var(--text);
       cursor: pointer;
-      font-size: 18px;
+      font-size: 20px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -1113,6 +1141,16 @@
     <div class="log-body" id="log-body"></div>
     <div class="log-resume-bar" id="log-resume-bar">
       <button class="log-resume-btn" id="log-resume-btn">&#x2193; Resume tail</button>
+    </div>
+  </div>
+
+  <!-- Chart Modal -->
+  <div class="chart-modal-overlay" id="chart-modal-overlay">
+    <div class="chart-modal" id="chart-modal">
+      <div class="chart-modal-title" id="chart-modal-title"></div>
+      <div class="chart-time-tabs" id="chart-modal-tabs"></div>
+      <button class="chart-close-btn" id="chart-modal-close" title="Close">&times;</button>
+      <canvas id="chart-modal-canvas" width="800" height="280"></canvas>
     </div>
   </div>
 
@@ -1683,7 +1721,12 @@
 
     // T47 — Maximize toggle
     document.getElementById('log-maximize-btn').addEventListener('click', function() {
-      document.getElementById('log-drawer').classList.toggle('maximized');
+      var drawer = document.getElementById('log-drawer');
+      drawer.classList.toggle('maximized');
+      var isMax = drawer.classList.contains('maximized');
+      this.textContent = isMax ? '\u25BD' : '\u26F6';
+      this.title = isMax ? 'Restore size' : 'Maximize';
+      this.style.color = isMax ? 'var(--cyan)' : '';
     });
 
     // ============================================================
@@ -1754,7 +1797,7 @@
     function renderFullChart(canvasEl, data, options) {
       var opts = options || {};
       var color = opts.color || '#22d3ee';
-      var key = canvasEl.id || canvasEl.getAttribute('data-chart-key');
+      var key = opts.instanceKey || canvasEl.id || canvasEl.getAttribute('data-chart-key');
       var unit = opts.unit || '';
       var isBytes = opts.isBytes || false;
 
@@ -1954,42 +1997,24 @@
       wrap.onclick = null;
     }
 
-    // T59-T61 — Expand/collapse card
-    function toggleExpand(key) {
+    // T59-T61 — Chart modal
+    var _modalKey = null;
+
+    function openChartModal(key) {
       var cfg = _sparkConfigs[key];
-      var card = document.getElementById(cfg.cardId);
+      _modalKey = key;
+      _expandedCard = key; // track for sparkline refresh skip
 
-      // T61 — If already expanded, collapse
-      if (_expandedCard === cfg.cardId) {
-        collapseCard(key);
-        return;
-      }
+      var overlay = document.getElementById('chart-modal-overlay');
+      var title = document.getElementById('chart-modal-title');
+      var tabs = document.getElementById('chart-modal-tabs');
+      var canvas = document.getElementById('chart-modal-canvas');
 
-      // Collapse any other expanded card first
-      if (_expandedCard) {
-        for (var k in _sparkConfigs) {
-          if (_sparkConfigs[k].cardId === _expandedCard) {
-            collapseCard(k);
-            break;
-          }
-        }
-      }
+      title.textContent = cfg.label + (cfg.unit ? ' (' + cfg.unit + ')' : '');
+      if (cfg.isNet) title.textContent = 'Network Traffic';
 
-      _expandedCard = cfg.cardId;
-      card.classList.add('expanded');
-
-      // Build expanded chart area
-      var wrap = document.getElementById(cfg.wrapId);
-      wrap.className = '';
-      wrap.onclick = null;
-      wrap.replaceChildren();
-
-      var chartWrap = document.createElement('div');
-      chartWrap.className = 'expanded-chart-wrap';
-
-      // T60 — Time range tabs
-      var tabs = document.createElement('div');
-      tabs.className = 'chart-time-tabs';
+      // Build time range tabs
+      tabs.replaceChildren();
       var ranges = [
         { label: '24h', hours: 24 },
         { label: '7d', hours: 168 },
@@ -2002,36 +2027,32 @@
         tab.onclick = function() {
           tabs.querySelectorAll('.chart-time-tab').forEach(function(t) { t.classList.remove('active'); });
           tab.classList.add('active');
-          loadExpandedChart(key, r.hours);
+          loadModalChart(key, r.hours);
         };
         tabs.appendChild(tab);
       });
 
-      // T61 — Close button
-      var closeBtn = document.createElement('button');
-      closeBtn.className = 'chart-close-btn';
-      closeBtn.title = 'Collapse';
-      closeBtn.textContent = '\u00D7';
-      closeBtn.onclick = function(e) { e.stopPropagation(); collapseCard(key); };
-
-      var canvas = document.createElement('canvas');
-      canvas.id = 'expanded-' + key;
-      canvas.setAttribute('data-chart-key', 'expanded-' + key);
-      canvas.width = 800;
-      canvas.height = 220;
-
-      chartWrap.append(tabs, closeBtn, canvas);
-      wrap.appendChild(chartWrap);
-
-      // Load 24h by default
-      loadExpandedChart(key, 24);
+      overlay.classList.add('open');
+      loadModalChart(key, 24);
     }
 
-    // T60 — Load expanded chart data for a given time range
-    async function loadExpandedChart(key, hours) {
+    function closeChartModal() {
+      var overlay = document.getElementById('chart-modal-overlay');
+      overlay.classList.remove('open');
+
+      // Destroy chart instance
+      if (_chartInstances['modal']) {
+        _chartInstances['modal'].destroy();
+        delete _chartInstances['modal'];
+      }
+
+      _expandedCard = null;
+      _modalKey = null;
+    }
+
+    async function loadModalChart(key, hours) {
       var cfg = _sparkConfigs[key];
-      var canvas = document.getElementById('expanded-' + key);
-      if (!canvas) return;
+      var canvas = document.getElementById('chart-modal-canvas');
 
       try {
         if (cfg.isNet) {
@@ -2045,7 +2066,8 @@
               { data: dataUp, color: '#22d3ee', label: 'Upload' },
               { data: dataDown, color: '#c084fc', label: 'Download' }
             ],
-            isBytes: true
+            isBytes: true,
+            instanceKey: 'modal'
           });
         } else {
           var res = await fetch('/api/history?metric=' + cfg.metric + '&hours=' + hours);
@@ -2053,53 +2075,29 @@
           renderFullChart(canvas, data, {
             label: cfg.label,
             unit: cfg.unit || '',
-            isBytes: false
+            isBytes: false,
+            instanceKey: 'modal'
           });
         }
       } catch (err) {
-        console.error('Expanded chart load error (' + key + '):', err);
+        console.error('Modal chart load error (' + key + '):', err);
       }
     }
 
-    // T61 — Collapse card back to sparkline
-    function collapseCard(key) {
-      var cfg = _sparkConfigs[key];
-      var card = document.getElementById(cfg.cardId);
-      card.classList.remove('expanded');
-
-      // Clean up expanded chart instance
-      var expandedKey = 'expanded-' + key;
-      if (_chartInstances[expandedKey]) {
-        _chartInstances[expandedKey].destroy();
-        delete _chartInstances[expandedKey];
-      }
-
-      _expandedCard = null;
-      // Reload sparkline
-      loadSparkline(key);
+    // Use modal instead of expand
+    function toggleExpand(key) {
+      if (_modalKey === key) { closeChartModal(); return; }
+      if (_modalKey) closeChartModal();
+      openChartModal(key);
     }
 
-    // Collapse current expanded card (helper)
-    function collapseCurrentCard() {
-      if (!_expandedCard) return;
-      for (var k in _sparkConfigs) {
-        if (_sparkConfigs[k].cardId === _expandedCard) {
-          collapseCard(k);
-          return;
-        }
-      }
-    }
-
-    // ESC key to close expanded card
-    document.addEventListener('keydown', function(e) {
-      if (e.key === 'Escape') collapseCurrentCard();
+    // Close modal: × button, ESC, click overlay
+    document.getElementById('chart-modal-close').addEventListener('click', closeChartModal);
+    document.getElementById('chart-modal-overlay').addEventListener('click', function(e) {
+      if (e.target === this) closeChartModal();
     });
-
-    // Click outside expanded card to close
-    document.addEventListener('click', function(e) {
-      if (!_expandedCard) return;
-      var card = document.getElementById(_expandedCard);
-      if (card && !card.contains(e.target)) collapseCurrentCard();
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape' && _modalKey) closeChartModal();
     });
 
     // Load sparklines on page load
