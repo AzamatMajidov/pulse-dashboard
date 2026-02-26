@@ -1,5 +1,5 @@
 const express = require('express');
-const { exec } = require('child_process');
+const { exec, spawn } = require('child_process');
 const fs = require('fs');
 const http = require('http');
 const https = require('https');
@@ -839,6 +839,124 @@ app.post('/api/openclaw/clear-sessions', async (req, res) => {
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }
+});
+
+// T48 — Strip ANSI escape codes from log lines
+function stripAnsi(str) {
+  return str.replace(/\x1b\[[0-9;]*m/g, '');
+}
+
+// T38 — GET /api/logs/service/:name — SSE endpoint for systemd service logs
+app.get('/api/logs/service/:name', (req, res) => {
+  const { name } = req.params;
+  // Validate name against CONFIG (security)
+  if (!name || typeof name !== 'string' || !/^[a-zA-Z0-9._@:-]+$/.test(name)) {
+    return res.status(400).json({ error: 'Invalid service name' });
+  }
+  if (!CONFIG.systemdServices.includes(name)) {
+    return res.status(400).json({ error: 'Unknown service' });
+  }
+
+  // SSE headers
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  });
+  res.flushHeaders();
+
+  const child = spawn('journalctl', ['--user', '-u', name, '-f', '--no-pager', '-n', '50'], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  let buf = '';
+  function onData(chunk) {
+    buf += chunk.toString();
+    let idx;
+    while ((idx = buf.indexOf('\n')) !== -1) {
+      const line = stripAnsi(buf.slice(0, idx));
+      buf = buf.slice(idx + 1);
+      res.write('event: log\ndata: ' + line + '\n\n');
+    }
+  }
+
+  child.stdout.on('data', onData);
+  child.stderr.on('data', onData);
+
+  // T40 — Cleanup on client disconnect
+  res.on('close', () => {
+    child.kill('SIGTERM');
+  });
+
+  child.on('error', () => {
+    res.write('event: error\ndata: Failed to spawn journalctl\n\n');
+    res.end();
+  });
+
+  child.on('exit', () => {
+    res.end();
+  });
+});
+
+// T39 — GET /api/logs/docker/:name — SSE endpoint for Docker container logs
+app.get('/api/logs/docker/:name', async (req, res) => {
+  const { name } = req.params;
+  // Validate name (security)
+  if (!name || typeof name !== 'string' || !/^[a-zA-Z0-9._-]+$/.test(name)) {
+    return res.status(400).json({ error: 'Invalid container name' });
+  }
+  let knownContainers;
+  if (CONFIG.dockerContainers === 'auto') {
+    const out = await run('docker ps -a --format "{{.Names}}"');
+    knownContainers = out.split('\n').filter(Boolean);
+  } else {
+    knownContainers = CONFIG.dockerContainers;
+  }
+  if (!knownContainers.includes(name)) {
+    return res.status(400).json({ error: 'Unknown container' });
+  }
+
+  // SSE headers
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  });
+  res.flushHeaders();
+
+  const child = spawn('docker', ['logs', '-f', '--tail', '50', name], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  let buf = '';
+  function onData(chunk) {
+    buf += chunk.toString();
+    let idx;
+    while ((idx = buf.indexOf('\n')) !== -1) {
+      const line = stripAnsi(buf.slice(0, idx));
+      buf = buf.slice(idx + 1);
+      res.write('event: log\ndata: ' + line + '\n\n');
+    }
+  }
+
+  child.stdout.on('data', onData);
+  child.stderr.on('data', onData);
+
+  // T40 — Cleanup on client disconnect
+  res.on('close', () => {
+    child.kill('SIGTERM');
+  });
+
+  child.on('error', () => {
+    res.write('event: error\ndata: Failed to spawn docker logs\n\n');
+    res.end();
+  });
+
+  child.on('exit', () => {
+    res.end();
+  });
 });
 
 // --- Setup + Settings page ---

@@ -1,7 +1,7 @@
 # Pulse — Task Breakdown
 
 **Last updated:** 2026-02-26  
-**Total tasks:** 76 (37 done · 39 todo)
+**Total tasks:** 76 (48 done · 28 todo)
 
 Legend: `[ ]` todo · `[~]` in progress · `[x]` done
 
@@ -66,17 +66,17 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done
 
 ## Phase 4 — Live Log Tail (F08)
 
-- [ ] T38 `GET /api/logs/service/:name` — SSE endpoint, spawns `journalctl --user -u NAME -f --no-pager -n 50`, streams lines
-- [ ] T39 `GET /api/logs/docker/:name` — SSE endpoint, spawns `docker logs -f --tail 50 NAME`, streams lines
-- [ ] T40 SSE cleanup — kill spawned process when client disconnects (`res.on('close')`)
-- [ ] T41 Log drawer HTML/CSS — bottom panel, slides up with CSS transition, z-index above dashboard
-- [ ] T42 `[📋 Logs]` button wired on service rows (T25) → opens drawer for that service
-- [ ] T43 `[📋 Logs]` button on Docker rows → opens drawer for that container
-- [ ] T44 `EventSource` lifecycle — open on drawer open, close on drawer close
-- [ ] T45 Log line rendering — append lines to log panel (DOM API, no innerHTML)
-- [ ] T46 Auto-scroll — follow tail by default, pause on manual scroll up, resume button
-- [ ] T47 Maximize toggle `[⛶]` — toggles drawer between half-screen and full-screen
-- [ ] T48 ANSI escape code stripping — remove `\x1b[...m` sequences from raw log lines
+- [x] T38 `GET /api/logs/service/:name` — SSE endpoint, spawns `journalctl --user -u NAME -f --no-pager -n 50`, streams lines
+- [x] T39 `GET /api/logs/docker/:name` — SSE endpoint, spawns `docker logs -f --tail 50 NAME`, streams lines
+- [x] T40 SSE cleanup — kill spawned process when client disconnects (`res.on('close')`)
+- [x] T41 Log drawer HTML/CSS — bottom panel, slides up with CSS transition, z-index above dashboard
+- [x] T42 `[📋 Logs]` button wired on service rows (T25) → opens drawer for that service
+- [x] T43 `[📋 Logs]` button on Docker rows → opens drawer for that container
+- [x] T44 `EventSource` lifecycle — open on drawer open, close on drawer close
+- [x] T45 Log line rendering — append lines to log panel (DOM API, no innerHTML)
+- [x] T46 Auto-scroll — follow tail by default, pause on manual scroll up, resume button
+- [x] T47 Maximize toggle `[⛶]` — toggles drawer between half-screen and full-screen
+- [x] T48 ANSI escape code stripping — remove `\x1b[...m` sequences from raw log lines
 
 ---
 
