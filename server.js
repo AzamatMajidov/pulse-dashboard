@@ -434,6 +434,25 @@ async function getSystemdServices() {
 
 // --- Bot Status ---
 const botCache = {};
+const BOT_CACHE_FILE = path.join(__dirname, 'data', 'bot-cache.json');
+
+// Load persisted bot cache on startup (survives restarts)
+try {
+  const saved = JSON.parse(require('fs').readFileSync(BOT_CACHE_FILE, 'utf8'));
+  for (const [key, entry] of Object.entries(saved)) {
+    botCache[key] = { time: entry.time, data: entry.data, refreshing: false };
+  }
+} catch (_) { /* no cache file yet, that's fine */ }
+
+function persistBotCache() {
+  const serializable = {};
+  for (const [key, entry] of Object.entries(botCache)) {
+    serializable[key] = { time: entry.time, data: entry.data };
+  }
+  const dir = path.dirname(BOT_CACHE_FILE);
+  require('fs').mkdirSync(dir, { recursive: true });
+  require('fs').writeFileSync(BOT_CACHE_FILE, JSON.stringify(serializable));
+}
 
 async function fetchBotStatus(name, profile) {
   const key = profile || 'main';
@@ -455,6 +474,7 @@ async function fetchBotStatus(name, profile) {
     }
     const result = { online, lastActive, model, uptime };
     botCache[key] = { time: Date.now(), data: result, refreshing: false };
+    persistBotCache();
     return { name, ...result };
   } catch (err) {
     console.error(`fetchBotStatus(${key}) failed:`, err.message);
