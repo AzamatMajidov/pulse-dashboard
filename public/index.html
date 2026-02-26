@@ -1237,6 +1237,51 @@
       </div>
     </div>
 
+    <!-- T90: COST SUMMARY -->
+    <div class="section-header" id="cost-section-header" style="display:none">
+      <div class="section-title">Costs</div>
+      <div class="section-line"></div>
+    </div>
+
+    <div id="cost-card-wrap" style="display:none;margin-bottom:28px">
+      <div class="card" id="cost-card" style="cursor:pointer">
+        <div class="card-label"><span class="icon">💰</span> Token Costs</div>
+        <div style="display:flex;gap:24px;align-items:baseline;flex-wrap:wrap">
+          <div>
+            <div style="font-size:10px;color:var(--text-muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px">Today</div>
+            <div class="card-value" style="font-size:24px" id="cost-today">$0.00</div>
+          </div>
+          <div>
+            <div style="font-size:10px;color:var(--text-muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px">This Week</div>
+            <div class="card-value" style="font-size:24px" id="cost-week">$0.00</div>
+          </div>
+          <div>
+            <div style="font-size:10px;color:var(--text-muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px">This Month</div>
+            <div class="card-value" style="font-size:24px" id="cost-month">$0.00</div>
+          </div>
+          <div id="cost-budget-wrap" style="display:none;margin-left:auto">
+            <div style="font-size:10px;color:var(--text-muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px">Budget</div>
+            <div id="cost-budget-text" style="font-size:13px;font-family:'JetBrains Mono',monospace;color:var(--text-dim)">--</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- T99: CRON MONITOR -->
+    <div class="section-header" id="cron-section-header" style="display:none">
+      <div class="section-title">Cron Jobs</div>
+      <div class="section-line"></div>
+      <button class="action-btn" id="cron-add-btn" title="Add cron job" style="font-size:16px;width:28px;height:28px">+</button>
+    </div>
+
+    <div id="cron-card-wrap" style="display:none;margin-bottom:28px">
+      <div class="card">
+        <div class="service-list" id="cron-list">
+          <div style="padding:16px;font-size:13px;color:var(--text-muted);text-align:center">Loading cron jobs...</div>
+        </div>
+      </div>
+    </div>
+
     <!-- FOOTER -->
     <div class="footer">
       <div class="refresh-info">
@@ -1264,6 +1309,48 @@
     <div class="log-body" id="log-body"></div>
     <div class="log-resume-bar" id="log-resume-bar">
       <button class="log-resume-btn" id="log-resume-btn">&#x2193; Resume tail</button>
+    </div>
+  </div>
+
+  <!-- T91: Cost Breakdown Modal -->
+  <div class="chart-modal-overlay" id="cost-modal-overlay">
+    <div class="chart-modal" id="cost-modal" style="max-width:700px">
+      <div class="chart-modal-title">Cost Breakdown</div>
+      <button class="chart-close-btn" id="cost-modal-close" title="Close">&times;</button>
+      <canvas id="cost-chart-canvas" width="600" height="220"></canvas>
+      <div id="cost-model-breakdown" style="margin-top:16px"></div>
+    </div>
+  </div>
+
+  <!-- T102: Create Cron Modal -->
+  <div class="chart-modal-overlay" id="cron-create-overlay">
+    <div class="chart-modal" id="cron-create-modal" style="max-width:480px">
+      <div class="chart-modal-title">Create Cron Job</div>
+      <button class="chart-close-btn" id="cron-create-close" title="Close">&times;</button>
+      <div style="display:flex;flex-direction:column;gap:14px;margin-top:8px">
+        <div>
+          <label style="font-size:11px;color:var(--text-muted);letter-spacing:.1em;text-transform:uppercase;display:block;margin-bottom:4px">Name</label>
+          <input type="text" id="cron-create-name" placeholder="My cron job" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;font-family:'JetBrains Mono',monospace;padding:8px 12px;outline:none" />
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--text-muted);letter-spacing:.1em;text-transform:uppercase;display:block;margin-bottom:4px">Schedule</label>
+          <select id="cron-create-preset" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;font-family:'JetBrains Mono',monospace;padding:8px 12px;outline:none;cursor:pointer;margin-bottom:6px">
+            <option value="*/15 * * * *">Every 15 minutes</option>
+            <option value="*/30 * * * *">Every 30 minutes</option>
+            <option value="0 * * * *">Every hour</option>
+            <option value="0 */6 * * *">Every 6 hours</option>
+            <option value="0 9 * * *">Daily at 9:00 AM</option>
+            <option value="custom">Custom expression...</option>
+          </select>
+          <input type="text" id="cron-create-schedule" placeholder="* * * * *" style="display:none;width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;font-family:'JetBrains Mono',monospace;padding:8px 12px;outline:none" />
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--text-muted);letter-spacing:.1em;text-transform:uppercase;display:block;margin-bottom:4px">Task / Message</label>
+          <textarea id="cron-create-payload" rows="3" placeholder="Enter task description..." style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;font-family:'JetBrains Mono',monospace;padding:8px 12px;outline:none;resize:vertical"></textarea>
+        </div>
+        <button id="cron-create-submit" style="background:var(--cyan);color:#000;font-weight:600;padding:10px;border:none;border-radius:8px;font-size:14px;cursor:pointer">Create</button>
+        <div id="cron-create-error" style="display:none;color:var(--red);font-size:12px"></div>
+      </div>
     </div>
   </div>
 
@@ -2385,6 +2472,395 @@
     // Poll alert status every 30s
     fetchAlertStatus();
     setInterval(fetchAlertStatus, 30000);
+
+    // ============================================================
+    // T90-T91: Cost Tracker (Phase 9)
+    // ============================================================
+
+    var _costData = null;
+
+    async function fetchCosts() {
+      if (!_isProTier) return;
+      try {
+        var res = await fetch('/api/costs');
+        if (res.status === 402) return; // not pro
+        if (!res.ok) return;
+        _costData = await res.json();
+        renderCostCard(_costData);
+      } catch {}
+    }
+
+    function formatCost(val) {
+      if (val >= 100) return '$' + Math.round(val);
+      if (val >= 10) return '$' + val.toFixed(1);
+      return '$' + val.toFixed(2);
+    }
+
+    function renderCostCard(data) {
+      document.getElementById('cost-section-header').style.display = '';
+      document.getElementById('cost-card-wrap').style.display = '';
+
+      var todayEl = document.getElementById('cost-today');
+      var weekEl = document.getElementById('cost-week');
+      var monthEl = document.getElementById('cost-month');
+
+      todayEl.textContent = formatCost(data.today.cost);
+      weekEl.textContent = formatCost(data.week.cost);
+      monthEl.textContent = formatCost(data.month.cost);
+
+      // Color: cyan under budget, red over
+      var overBudget = data.budgetExceeded;
+      var color = overBudget ? 'var(--red)' : 'var(--cyan)';
+      todayEl.style.color = color;
+      weekEl.style.color = color;
+      monthEl.style.color = color;
+
+      // Budget display
+      if (data.budget.monthly > 0) {
+        document.getElementById('cost-budget-wrap').style.display = '';
+        var pct = data.month.cost > 0 ? Math.round(data.month.cost / data.budget.monthly * 100) : 0;
+        document.getElementById('cost-budget-text').textContent = formatCost(data.month.cost) + ' / ' + formatCost(data.budget.monthly) + ' (' + pct + '%)';
+        document.getElementById('cost-budget-text').style.color = overBudget ? 'var(--red)' : 'var(--text-dim)';
+      }
+
+      // Click to open modal
+      document.getElementById('cost-card').onclick = function() { openCostModal(data); };
+    }
+
+    function openCostModal(data) {
+      var overlay = document.getElementById('cost-modal-overlay');
+      overlay.classList.add('open');
+
+      // T91 — Daily bar chart
+      var canvas = document.getElementById('cost-chart-canvas');
+      var key = 'cost-chart';
+      if (_chartInstances[key]) { _chartInstances[key].destroy(); delete _chartInstances[key]; }
+
+      var daily = data.daily || [];
+      var labels = daily.map(function(d) { return d.date; });
+      var values = daily.map(function(d) { return d.cost; });
+
+      _chartInstances[key] = new Chart(canvas, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            data: values,
+            backgroundColor: 'rgba(34, 211, 238, 0.6)',
+            borderColor: '#22d3ee',
+            borderWidth: 1,
+            borderRadius: 3
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor: '#1c2030',
+              borderColor: '#ffffff20',
+              borderWidth: 1,
+              titleColor: '#94a3b8',
+              bodyColor: '#e2e8f0',
+              titleFont: { size: 11, family: 'JetBrains Mono' },
+              bodyFont: { size: 12, family: 'JetBrains Mono' },
+              callbacks: {
+                label: function(item) { return '$' + item.parsed.y.toFixed(4); }
+              }
+            }
+          },
+          scales: {
+            x: {
+              ticks: { color: '#475569', font: { size: 10, family: 'JetBrains Mono' }, maxTicksLimit: 10, maxRotation: 45 },
+              grid: { color: '#ffffff08' }
+            },
+            y: {
+              ticks: { color: '#475569', font: { size: 10, family: 'JetBrains Mono' }, callback: function(v) { return '$' + v; } },
+              grid: { color: '#ffffff08' },
+              beginAtZero: true
+            }
+          },
+          animation: { duration: 300 }
+        }
+      });
+
+      // Model breakdown list
+      var breakdownEl = document.getElementById('cost-model-breakdown');
+      breakdownEl.replaceChildren();
+      var heading = document.createElement('div');
+      heading.style.cssText = 'font-size:12px;font-weight:600;color:var(--text-dim);letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px';
+      heading.textContent = 'By Model (This Month)';
+      breakdownEl.appendChild(heading);
+
+      (data.byModel || []).forEach(function(m) {
+        var row = document.createElement('div');
+        row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;margin-bottom:6px';
+        var left = document.createElement('div');
+        left.style.cssText = 'font-size:13px;font-family:JetBrains Mono,monospace;color:var(--text)';
+        left.textContent = m.model;
+        var right = document.createElement('div');
+        right.style.cssText = 'font-size:13px;font-family:JetBrains Mono,monospace;color:var(--cyan)';
+        right.textContent = formatCost(m.cost) + ' (' + m.percent + '%)';
+        row.append(left, right);
+        breakdownEl.appendChild(row);
+      });
+
+      if ((data.byModel || []).length === 0) {
+        var empty = document.createElement('div');
+        empty.style.cssText = 'font-size:13px;color:var(--text-muted);text-align:center;padding:12px';
+        empty.textContent = 'No cost data yet';
+        breakdownEl.appendChild(empty);
+      }
+    }
+
+    function closeCostModal() {
+      document.getElementById('cost-modal-overlay').classList.remove('open');
+      if (_chartInstances['cost-chart']) { _chartInstances['cost-chart'].destroy(); delete _chartInstances['cost-chart']; }
+    }
+
+    document.getElementById('cost-modal-close').addEventListener('click', closeCostModal);
+    document.getElementById('cost-modal-overlay').addEventListener('click', function(e) { if (e.target === this) closeCostModal(); });
+
+    // Fetch costs on load and every 5 min
+    fetchCosts();
+    setInterval(fetchCosts, 5 * 60 * 1000);
+
+    // ============================================================
+    // T99-T103: Cron Monitor (Phase 10)
+    // ============================================================
+
+    var _cronJobs = null;
+    var _cronSupported = true;
+
+    async function fetchCronJobs() {
+      if (!_isProTier) return;
+      try {
+        var res = await fetch('/api/cron');
+        if (res.status === 402) return;
+        if (res.status === 501) { _cronSupported = false; return; }
+        if (!res.ok) return;
+        _cronJobs = await res.json();
+        _cronSupported = true;
+        renderCronJobs(_cronJobs);
+      } catch {}
+    }
+
+    function renderCronJobs(jobs) {
+      if (!_cronSupported) return;
+      document.getElementById('cron-section-header').style.display = '';
+      document.getElementById('cron-card-wrap').style.display = '';
+
+      var list = document.getElementById('cron-list');
+
+      if (!Array.isArray(jobs) || jobs.length === 0) {
+        list.replaceChildren();
+        var empty = document.createElement('div');
+        empty.style.cssText = 'padding:16px;font-size:13px;color:var(--text-muted);text-align:center';
+        empty.textContent = jobs === null ? 'Loading...' : 'No cron jobs configured';
+        list.appendChild(empty);
+        return;
+      }
+
+      list.replaceChildren();
+      jobs.forEach(function(job) {
+        var row = document.createElement('div');
+        row.className = 'service-row';
+        row.style.flexWrap = 'wrap';
+        row.style.gap = '8px';
+
+        var left = document.createElement('div');
+        left.className = 'service-left';
+        left.style.flex = '1';
+        left.style.minWidth = '0';
+
+        var dot = document.createElement('div');
+        dot.className = 'status-dot ' + (job.enabled !== false ? 'online' : 'offline');
+
+        var nameEl = document.createElement('div');
+        nameEl.className = 'service-name';
+        nameEl.textContent = job.name || job.id || 'Unnamed';
+        nameEl.style.overflow = 'hidden';
+        nameEl.style.textOverflow = 'ellipsis';
+        nameEl.style.whiteSpace = 'nowrap';
+
+        var schedBadge = document.createElement('span');
+        schedBadge.className = 'service-badge badge-green';
+        schedBadge.style.cssText = 'background:var(--cyan-dim);color:var(--cyan);flex-shrink:0';
+        schedBadge.textContent = job.schedule || '--';
+
+        left.append(dot, nameEl, schedBadge);
+
+        var mid = document.createElement('div');
+        mid.style.cssText = 'display:flex;gap:12px;font-size:11px;color:var(--text-muted);font-family:JetBrains Mono,monospace;flex-shrink:0';
+        if (job.lastRun) {
+          var lr = document.createElement('span');
+          lr.textContent = 'Last: ' + new Date(job.lastRun).toLocaleString('en-GB', { day:'numeric',month:'short',hour:'2-digit',minute:'2-digit' });
+          mid.appendChild(lr);
+        }
+        if (job.nextRun) {
+          var nr = document.createElement('span');
+          nr.textContent = 'Next: ' + new Date(job.nextRun).toLocaleString('en-GB', { day:'numeric',month:'short',hour:'2-digit',minute:'2-digit' });
+          mid.appendChild(nr);
+        }
+
+        var right = document.createElement('div');
+        right.style.cssText = 'display:flex;align-items:center;gap:6px;flex-shrink:0';
+
+        // T100 — Toggle switch
+        var toggleBtn = document.createElement('button');
+        toggleBtn.className = 'action-btn';
+        toggleBtn.title = job.enabled !== false ? 'Disable' : 'Enable';
+        toggleBtn.textContent = job.enabled !== false ? '⏸' : '▶';
+        toggleBtn.style.fontSize = '11px';
+        toggleBtn.onclick = function() { toggleCronJob(job.id || job.name, job.enabled === false); };
+
+        // T101 — Run Now button
+        var runBtn = document.createElement('button');
+        runBtn.className = 'action-btn';
+        runBtn.title = 'Run now';
+        runBtn.textContent = '▶';
+        runBtn.style.color = 'var(--green)';
+        runBtn.onclick = function() { runCronJob(job.id || job.name, runBtn); };
+
+        // T103 — Delete button
+        var delBtn = document.createElement('button');
+        delBtn.className = 'action-btn';
+        delBtn.title = 'Delete';
+        delBtn.textContent = '🗑';
+        delBtn.style.fontSize = '11px';
+        delBtn.onclick = function() { deleteCronJob(job.id || job.name, job.name || job.id); };
+
+        right.append(toggleBtn, runBtn, delBtn);
+        row.append(left, mid, right);
+        list.appendChild(row);
+      });
+    }
+
+    // T100 — Toggle cron job
+    async function toggleCronJob(id, enable) {
+      try {
+        var res = await fetch('/api/cron/' + encodeURIComponent(id) + '/toggle', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enabled: enable })
+        });
+        var data = await res.json();
+        if (data.ok) {
+          showToast('Cron job ' + (enable ? 'enabled' : 'disabled'));
+          fetchCronJobs();
+        } else {
+          showToast('Failed: ' + (data.error || 'unknown'));
+        }
+      } catch (err) { showToast('Toggle failed: ' + err.message); }
+    }
+
+    // T101 — Run cron job now
+    async function runCronJob(id, btn) {
+      var orig = btn.textContent;
+      btn.textContent = '⟳';
+      btn.disabled = true;
+      try {
+        var res = await fetch('/api/cron/' + encodeURIComponent(id) + '/run', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: '{}'
+        });
+        var data = await res.json();
+        if (data.ok) {
+          showToast('Cron job triggered');
+          setTimeout(fetchCronJobs, 2000);
+        } else {
+          showToast('Run failed: ' + (data.error || 'unknown'));
+        }
+      } catch (err) { showToast('Run failed: ' + err.message); }
+      btn.textContent = orig;
+      btn.disabled = false;
+    }
+
+    // T103 — Delete cron job
+    async function deleteCronJob(id, name) {
+      if (!confirm('Delete cron job "' + (name || id) + '"?')) return;
+      try {
+        var res = await fetch('/api/cron/' + encodeURIComponent(id), { method: 'DELETE' });
+        var data = await res.json();
+        if (data.ok) {
+          showToast('Cron job deleted');
+          fetchCronJobs();
+        } else {
+          showToast('Delete failed: ' + (data.error || 'unknown'));
+        }
+      } catch (err) { showToast('Delete failed: ' + err.message); }
+    }
+
+    // T102 — Create cron modal
+    document.getElementById('cron-add-btn').addEventListener('click', function() {
+      document.getElementById('cron-create-overlay').classList.add('open');
+      document.getElementById('cron-create-name').value = '';
+      document.getElementById('cron-create-payload').value = '';
+      document.getElementById('cron-create-preset').value = '*/15 * * * *';
+      document.getElementById('cron-create-schedule').style.display = 'none';
+      document.getElementById('cron-create-error').style.display = 'none';
+    });
+
+    document.getElementById('cron-create-close').addEventListener('click', function() {
+      document.getElementById('cron-create-overlay').classList.remove('open');
+    });
+    document.getElementById('cron-create-overlay').addEventListener('click', function(e) {
+      if (e.target === this) this.classList.remove('open');
+    });
+
+    document.getElementById('cron-create-preset').addEventListener('change', function() {
+      var schedInput = document.getElementById('cron-create-schedule');
+      if (this.value === 'custom') {
+        schedInput.style.display = '';
+        schedInput.focus();
+      } else {
+        schedInput.style.display = 'none';
+      }
+    });
+
+    document.getElementById('cron-create-submit').addEventListener('click', async function() {
+      var name = document.getElementById('cron-create-name').value.trim();
+      var preset = document.getElementById('cron-create-preset').value;
+      var schedule = preset === 'custom' ? document.getElementById('cron-create-schedule').value.trim() : preset;
+      var payload = document.getElementById('cron-create-payload').value.trim();
+      var errEl = document.getElementById('cron-create-error');
+
+      if (!name) { errEl.textContent = 'Name is required'; errEl.style.display = ''; return; }
+      if (!schedule) { errEl.textContent = 'Schedule is required'; errEl.style.display = ''; return; }
+      if (!payload) { errEl.textContent = 'Task/message is required'; errEl.style.display = ''; return; }
+
+      errEl.style.display = 'none';
+      this.disabled = true;
+      this.textContent = 'Creating...';
+
+      try {
+        var res = await fetch('/api/cron/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: name, schedule: schedule, payload: payload })
+        });
+        var data = await res.json();
+        if (data.ok) {
+          showToast('Cron job created');
+          document.getElementById('cron-create-overlay').classList.remove('open');
+          fetchCronJobs();
+        } else {
+          errEl.textContent = data.error || 'Failed to create';
+          errEl.style.display = '';
+        }
+      } catch (err) {
+        errEl.textContent = err.message;
+        errEl.style.display = '';
+      }
+      this.disabled = false;
+      this.textContent = 'Create';
+    });
+
+    // Fetch cron jobs on load and every 30s
+    fetchCronJobs();
+    setInterval(fetchCronJobs, 30000);
 
     // --- T71: License Pro Gate ---
     let _isProTier = true;

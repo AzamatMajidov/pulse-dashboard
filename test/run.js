@@ -752,6 +752,77 @@ test(72, 'License activate with empty key rejected', async () => {
   return { pass: true, detail: r.json?.error || '' };
 });
 
+// --- Cost Tracker (4) ---
+
+test(77, 'GET /api/costs returns valid shape', async () => {
+  const r = await get('/api/costs');
+  if (r.status !== 200) return { pass: false, detail: `status ${r.status}` };
+  if (!r.json) return { pass: false, detail: 'not JSON' };
+  for (const k of ['today', 'week', 'month', 'daily', 'byModel', 'budget']) {
+    if (r.json[k] === undefined) return { pass: false, detail: `missing ${k}` };
+  }
+  return { pass: true, detail: '' };
+});
+
+test(78, 'today.cost >= 0, month.cost >= 0', async () => {
+  const r = await get('/api/costs');
+  if (typeof r.json?.today?.cost !== 'number') return { pass: false, detail: `today.cost is ${typeof r.json?.today?.cost}` };
+  if (r.json.today.cost < 0) return { pass: false, detail: `today.cost = ${r.json.today.cost}` };
+  if (typeof r.json?.month?.cost !== 'number') return { pass: false, detail: `month.cost is ${typeof r.json?.month?.cost}` };
+  if (r.json.month.cost < 0) return { pass: false, detail: `month.cost = ${r.json.month.cost}` };
+  return { pass: true, detail: `today: $${r.json.today.cost}, month: $${r.json.month.cost}` };
+});
+
+test(79, 'daily array has { date, tokens, cost } structure', async () => {
+  const r = await get('/api/costs');
+  if (!Array.isArray(r.json?.daily)) return { pass: false, detail: `daily is ${typeof r.json?.daily}` };
+  if (r.json.daily.length > 0) {
+    const first = r.json.daily[0];
+    for (const k of ['date', 'tokens', 'cost']) {
+      if (first[k] === undefined) return { pass: false, detail: `daily[0] missing ${k}` };
+    }
+  }
+  return { pass: true, detail: `${r.json.daily.length} entries` };
+});
+
+// --- Cron Monitor (3) ---
+
+test(80, 'GET /api/cron returns array or not_supported', async () => {
+  const r = await get('/api/cron');
+  if (r.status === 501 && r.json?.error === 'not_supported') return { pass: true, detail: 'not_supported (ok)' };
+  if (r.status !== 200) return { pass: false, detail: `status ${r.status}` };
+  if (!Array.isArray(r.json)) return { pass: false, detail: `response is ${typeof r.json}` };
+  return { pass: true, detail: `${r.json.length} jobs` };
+});
+
+test(81, 'POST /api/cron/create with bad schedule → 400', async () => {
+  const r = await post('/api/cron/create', { name: 'test', schedule: 'bad', payload: 'test' });
+  if (r.status === 501) return { pass: true, detail: 'not_supported (ok)' };
+  if (r.status !== 400) return { pass: false, detail: `status ${r.status}` };
+  return { pass: true, detail: r.json?.error || '' };
+});
+
+test(82, 'DELETE /api/cron/nonexistent → 404 or 501', async () => {
+  // Use http.request for DELETE
+  const r = await new Promise((resolve, reject) => {
+    const url = new URL('/api/cron/nonexistent-xyz-123', BASE);
+    const req = http.request(url.href, { method: 'DELETE' }, (res) => {
+      let body = '';
+      res.on('data', (chunk) => (body += chunk));
+      res.on('end', () => {
+        let json = null;
+        try { json = JSON.parse(body); } catch {}
+        resolve({ status: res.statusCode, json });
+      });
+    });
+    req.on('error', reject);
+    req.end();
+  });
+  if (r.status === 501) return { pass: true, detail: 'not_supported (ok)' };
+  if (r.status === 404) return { pass: true, detail: 'not found (ok)' };
+  return { pass: false, detail: `status ${r.status}` };
+});
+
 // --- Frontend (4) ---
 
 test(73, 'HTML contains "Pulse" in content', async () => {

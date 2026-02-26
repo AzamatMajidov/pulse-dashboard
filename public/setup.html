@@ -745,6 +745,28 @@
     </div>
   </div>
 
+  <!-- T92: Budget (collapsible) -->
+  <div class="card">
+    <div class="collapsible-header" onclick="toggleBudget()">
+      <div class="card-title" style="margin-bottom:0">Cost Budget <span style="color:var(--text-muted);font-weight:400;font-size:11px;text-transform:none;letter-spacing:0">(optional)</span></div>
+      <div class="collapsible-arrow" id="budget-arrow">▶</div>
+    </div>
+    <div class="collapsible-body" id="budget-body">
+      <div class="collapsible-divider">
+        <div style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Set a monthly token cost budget. You'll get a Telegram alert when the budget is exceeded.</div>
+        <div class="form-row">
+          <label for="budget-monthly">Monthly budget (USD)</label>
+          <input type="number" id="budget-monthly" value="0" min="0" step="1" placeholder="e.g. 50" style="max-width:140px" />
+        </div>
+        <div class="form-row">
+          <label for="budget-warning">Warning threshold (%)</label>
+          <input type="number" id="budget-warning" value="80" min="1" max="100" style="max-width:120px" />
+        </div>
+        <div class="hint">Set budget to 0 to disable budget alerts</div>
+      </div>
+    </div>
+  </div>
+
   <!-- Actions -->
   <div class="save-wrap">
     <button class="btn-save" id="save-btn" onclick="save()">Save &amp; Restart</button>
@@ -824,6 +846,16 @@
       body.classList.add('open');
       document.getElementById('bots-arrow').textContent = '▼';
       cfg.bots.forEach(b => addBotRow(b.name, b.profile));
+    }
+
+    // Budget
+    if (cfg.budget) {
+      if (cfg.budget.monthly) document.getElementById('budget-monthly').value = cfg.budget.monthly;
+      if (cfg.budget.warning) document.getElementById('budget-warning').value = cfg.budget.warning;
+      if (cfg.budget.monthly > 0) {
+        document.getElementById('budget-body').classList.add('open');
+        document.getElementById('budget-arrow').textContent = '▼';
+      }
     }
   }
 
@@ -985,6 +1017,13 @@
   }
 
   // --- Alerts ---
+  function toggleBudget() {
+    const body = document.getElementById('budget-body');
+    const arrow = document.getElementById('budget-arrow');
+    const open = body.classList.toggle('open');
+    arrow.textContent = open ? '▼' : '▶';
+  }
+
   function toggleAlerts() {
     const body = document.getElementById('alerts-body');
     const arrow = document.getElementById('alerts-arrow');
@@ -1238,7 +1277,11 @@
         cooldownMinutes: parseInt(document.getElementById('alert-cooldown').value) || 15,
         rules: getAlertRules()
       },
-      bots: getBots()
+      bots: getBots(),
+      budget: {
+        monthly: parseFloat(document.getElementById('budget-monthly').value) || 0,
+        warning: parseInt(document.getElementById('budget-warning').value) || 80
+      }
     };
 
     btn.disabled = true;

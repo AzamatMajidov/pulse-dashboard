@@ -800,9 +800,159 @@ function startHistoryCollector() {
   // Collect first sample after a short delay (let metrics settle)
   setTimeout(() => {
     collectHistorySample();
+    collectCostSample();
     setInterval(collectHistorySample, HISTORY_INTERVAL);
+    setInterval(collectCostSample, HISTORY_INTERVAL);
   }, 10000);
   console.log('📊 History collector started (every 5 min)');
+}
+
+// ============================================================
+// T85-T89: Cost Tracker (Phase 9)
+// ============================================================
+
+// T85 — Model pricing table (per 1M tokens, USD)
+const DEFAULT_MODEL_PRICING = {
+  'claude-opus-4-6':   { input: 15, output: 75, cacheRead: 1.5, cacheWrite: 18.75 },
+  'claude-sonnet-4-6': { input: 3,  output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
+};
+
+function getModelPricing() {
+  const overrides = CONFIG.modelPricing || {};
+  return { ...DEFAULT_MODEL_PRICING, ...overrides };
+}
+
+function computeCost(model, inputTokens, outputTokens, cacheRead, cacheWrite) {
+  const pricing = getModelPricing();
+  // Try exact match, then strip "anthropic/" prefix, then fuzzy
+  let rates = pricing[model];
+  if (!rates && model) {
+    const stripped = model.replace('anthropic/', '');
+    rates = pricing[stripped];
+  }
+  if (!rates) {
+    // Default to sonnet pricing if unknown
+    rates = pricing['claude-sonnet-4-6'] || { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 };
+  }
+  return (
+    (inputTokens / 1e6) * rates.input +
+    (outputTokens / 1e6) * rates.output +
+    ((cacheRead || 0) / 1e6) * rates.cacheRead +
+    ((cacheWrite || 0) / 1e6) * rates.cacheWrite
+  );
+}
+
+const COST_HISTORY_FILE = path.join(__dirname, 'data', 'cost-history.jsonl');
+
+// T87 — Background cost collector: sum tokens from bot cache, compute cost, write to cost-history.jsonl
+async function collectCostSample() {
+  try {
+    const now = Date.now();
+    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    const byModel = {};
+
+    // Gather token data from all bot caches
+    for (const bot of (CONFIG.bots || [])) {
+      const key = bot.profile || 'main';
+      const cached = botCache[key];
+      if (!cached || !cached.data) continue;
+
+      const d = cached.data;
+      const model = (d.model || 'unknown').replace('anthropic/', '');
+      if (!byModel[model]) {
+        byModel[model] = { inputTokens: 0, outputTokens: 0, cacheRead: 0, cacheWrite: 0 };
+      }
+      // totalTokens from openclaw status is combined; estimate input/output split
+      // If we have separate fields use them, otherwise approximate (80% input, 20% output)
+      const total = d.totalTokens || 0;
+      if (d.inputTokens != null) {
+        byModel[model].inputTokens += d.inputTokens || 0;
+        byModel[model].outputTokens += d.outputTokens || 0;
+      } else {
+        byModel[model].inputTokens += Math.round(total * 0.8);
+        byModel[model].outputTokens += Math.round(total * 0.2);
+      }
+      byModel[model].cacheRead += d.cacheRead || 0;
+      byModel[model].cacheWrite += d.cacheWrite || 0;
+    }
+
+    // Read existing entries for today to deduplicate
+    const dir = path.dirname(COST_HISTORY_FILE);
+    await fs.promises.mkdir(dir, { recursive: true });
+
+    let existingLines = [];
+    try {
+      const raw = await fs.promises.readFile(COST_HISTORY_FILE, 'utf8');
+      existingLines = raw.split('\n').filter(Boolean);
+    } catch (err) {
+      if (err.code !== 'ENOENT') throw err;
+    }
+
+    // Remove old entries for today (will be replaced)
+    const keptLines = existingLines.filter(line => {
+      try {
+        const entry = JSON.parse(line);
+        if (entry.date === today) return false; // remove today's old entries
+        // Also prune entries older than 30 days
+        if (entry.ts && entry.ts < now - 30 * 24 * 60 * 60 * 1000) return false;
+        return true;
+      } catch { return false; }
+    });
+
+    // Write new entries for today
+    for (const [model, tokens] of Object.entries(byModel)) {
+      const costUsd = computeCost(model, tokens.inputTokens, tokens.outputTokens, tokens.cacheRead, tokens.cacheWrite);
+      keptLines.push(JSON.stringify({
+        ts: now,
+        date: today,
+        model,
+        inputTokens: tokens.inputTokens,
+        outputTokens: tokens.outputTokens,
+        cacheRead: tokens.cacheRead,
+        cacheWrite: tokens.cacheWrite,
+        costUsd: Math.round(costUsd * 1e6) / 1e6
+      }));
+    }
+
+    await fs.promises.writeFile(COST_HISTORY_FILE, keptLines.join('\n') + '\n');
+
+    // T89 — Budget alert check
+    await checkBudgetAlert(keptLines);
+  } catch (err) {
+    console.error('Cost collector error:', err.message);
+  }
+}
+
+// T89 — Check if monthly cost exceeds budget, send Telegram alert
+let _budgetAlertSent = false; // prevent repeated alerts within same month
+
+async function checkBudgetAlert(lines) {
+  const budget = CONFIG.budget || {};
+  const monthlyBudget = budget.monthly;
+  if (!monthlyBudget || monthlyBudget <= 0) return;
+
+  const thisMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
+  let monthCost = 0;
+  for (const line of lines) {
+    try {
+      const entry = JSON.parse(line);
+      if (entry.date && entry.date.startsWith(thisMonth)) {
+        monthCost += entry.costUsd || 0;
+      }
+    } catch {}
+  }
+
+  const currentMonth = new Date().getMonth();
+  if (_budgetAlertSent === currentMonth) return; // already alerted this month
+
+  if (monthCost >= monthlyBudget) {
+    _budgetAlertSent = currentMonth;
+    const serverLabel = CONFIG.label || 'Server';
+    const timeStr = new Date().toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+    sendTelegramMessage(
+      `💰 <b>Pulse Budget Alert</b> — ${serverLabel}\nMonthly cost $${monthCost.toFixed(2)} exceeds budget $${monthlyBudget.toFixed(2)}\n${timeStr}`
+    ).catch(() => {});
+  }
 }
 
 // ============================================================
@@ -958,6 +1108,97 @@ app.get('/api/bots/stats', (req, res) => {
     }
   }
   res.json(stats);
+});
+
+// --- T88: GET /api/costs ---
+app.get('/api/costs', requirePro, async (req, res) => {
+  try {
+    let lines = [];
+    try {
+      const raw = await fs.promises.readFile(COST_HISTORY_FILE, 'utf8');
+      lines = raw.split('\n').filter(Boolean).map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
+    } catch (err) {
+      if (err.code !== 'ENOENT') throw err;
+    }
+
+    const now = Date.now();
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const weekAgo = now - 7 * 24 * 60 * 60 * 1000;
+    const monthStr = new Date().toISOString().slice(0, 7);
+
+    let todayTokens = 0, todayCost = 0;
+    let weekTokens = 0, weekCost = 0;
+    let monthTokens = 0, monthCost = 0;
+    const dailyMap = {};
+    const modelMap = {};
+
+    for (const entry of lines) {
+      const entryTokens = (entry.inputTokens || 0) + (entry.outputTokens || 0) + (entry.cacheRead || 0) + (entry.cacheWrite || 0);
+      const cost = entry.costUsd || 0;
+
+      // Today
+      if (entry.date === todayStr) {
+        todayTokens += entryTokens;
+        todayCost += cost;
+      }
+
+      // This week
+      if (entry.ts && entry.ts >= weekAgo) {
+        weekTokens += entryTokens;
+        weekCost += cost;
+      }
+
+      // This month
+      if (entry.date && entry.date.startsWith(monthStr)) {
+        monthTokens += entryTokens;
+        monthCost += cost;
+      }
+
+      // Daily aggregation (last 30 days)
+      if (entry.date) {
+        if (!dailyMap[entry.date]) dailyMap[entry.date] = { tokens: 0, cost: 0 };
+        dailyMap[entry.date].tokens += entryTokens;
+        dailyMap[entry.date].cost += cost;
+      }
+
+      // Model breakdown (this month)
+      if (entry.date && entry.date.startsWith(monthStr) && entry.model) {
+        if (!modelMap[entry.model]) modelMap[entry.model] = { tokens: 0, cost: 0 };
+        modelMap[entry.model].tokens += entryTokens;
+        modelMap[entry.model].cost += cost;
+      }
+    }
+
+    const daily = Object.entries(dailyMap)
+      .map(([date, d]) => ({ date, tokens: d.tokens, cost: Math.round(d.cost * 1e6) / 1e6 }))
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .slice(-30);
+
+    const byModel = Object.entries(modelMap)
+      .map(([model, d]) => ({
+        model,
+        tokens: d.tokens,
+        cost: Math.round(d.cost * 1e6) / 1e6,
+        percent: monthCost > 0 ? Math.round(d.cost / monthCost * 100) : 0
+      }))
+      .sort((a, b) => b.cost - a.cost);
+
+    const budget = CONFIG.budget || {};
+    const budgetExceeded = budget.monthly > 0 && monthCost >= budget.monthly;
+
+    res.json({
+      today: { tokens: todayTokens, cost: Math.round(todayCost * 1e6) / 1e6 },
+      week: { tokens: weekTokens, cost: Math.round(weekCost * 1e6) / 1e6 },
+      month: { tokens: monthTokens, cost: Math.round(monthCost * 1e6) / 1e6 },
+      daily,
+      byModel,
+      budget: { monthly: budget.monthly || 0, warning: budget.warning || 80 },
+      budgetExceeded
+    });
+  } catch (err) {
+    console.error('GET /api/costs error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // --- T08: Alert status ---
@@ -1357,6 +1598,142 @@ app.post('/api/update/apply', async (req, res) => {
     setTimeout(() => process.exit(0), 1000);
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// ============================================================
+// T93-T97: Cron Monitor (Phase 10)
+// ============================================================
+
+let cronCache = { data: null, time: 0 };
+const CRON_CACHE_TTL = 30 * 1000;
+
+// T93 — GET /api/cron
+app.get('/api/cron', requirePro, async (req, res) => {
+  try {
+    const now = Date.now();
+    if (cronCache.data && now - cronCache.time < CRON_CACHE_TTL) {
+      return res.json(cronCache.data);
+    }
+    const out = await run('openclaw cron list --json', 10000);
+    if (!out) {
+      cronCache = { data: [], time: now };
+      return res.json([]);
+    }
+    let jobs;
+    try { jobs = JSON.parse(out); } catch { jobs = []; }
+    if (!Array.isArray(jobs)) jobs = jobs.jobs || jobs.crons || [];
+    cronCache = { data: jobs, time: now };
+    res.json(jobs);
+  } catch (err) {
+    if (err.message && (err.message.includes('not found') || err.message.includes('ENOENT'))) {
+      return res.status(501).json({ error: 'not_supported' });
+    }
+    res.status(501).json({ error: 'not_supported' });
+  }
+});
+
+// T94 — POST /api/cron/:id/toggle
+app.post('/api/cron/:id/toggle', requirePro, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id || !/^[a-zA-Z0-9._:-]+$/.test(id)) {
+      return res.status(400).json({ ok: false, error: 'Invalid cron job ID' });
+    }
+    const { enabled } = req.body;
+    const action = enabled ? 'enable' : 'disable';
+    const out = await run(`openclaw cron ${action} ${id}`, 10000);
+    cronCache.time = 0; // invalidate cache
+    res.json({ ok: true, id, enabled: !!enabled });
+  } catch (err) {
+    if (err.message && (err.message.includes('not found') || err.message.includes('ENOENT'))) {
+      return res.status(501).json({ error: 'not_supported' });
+    }
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// T95 — POST /api/cron/:id/run
+app.post('/api/cron/:id/run', requirePro, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id || !/^[a-zA-Z0-9._:-]+$/.test(id)) {
+      return res.status(400).json({ ok: false, error: 'Invalid cron job ID' });
+    }
+    await run(`openclaw cron run ${id}`, 15000);
+    cronCache.time = 0; // invalidate cache
+    res.json({ ok: true, id });
+  } catch (err) {
+    if (err.message && (err.message.includes('not found') || err.message.includes('ENOENT'))) {
+      return res.status(501).json({ error: 'not_supported' });
+    }
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// T96 — POST /api/cron/create
+app.post('/api/cron/create', requirePro, async (req, res) => {
+  try {
+    const { name, schedule, payload } = req.body;
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      return res.status(400).json({ ok: false, error: 'Name is required' });
+    }
+    if (!schedule || typeof schedule !== 'string') {
+      return res.status(400).json({ ok: false, error: 'Schedule is required' });
+    }
+    // Basic cron expression validation (5 or 6 fields, or shorthand like @daily)
+    const trimmed = schedule.trim();
+    const isShorthand = /^@(yearly|annually|monthly|weekly|daily|hourly|reboot)$/.test(trimmed);
+    const isCronExpr = /^(\S+\s+){4}\S+$/.test(trimmed) || /^(\S+\s+){5}\S+$/.test(trimmed);
+    if (!isShorthand && !isCronExpr) {
+      return res.status(400).json({ ok: false, error: 'Invalid cron schedule expression' });
+    }
+    if (!payload || typeof payload !== 'string') {
+      return res.status(400).json({ ok: false, error: 'Payload/task is required' });
+    }
+    // Sanitize name for shell safety
+    const safeName = name.replace(/[^a-zA-Z0-9 _.-]/g, '').trim();
+    if (!safeName) {
+      return res.status(400).json({ ok: false, error: 'Invalid name' });
+    }
+    const out = await run(`openclaw cron add --name "${safeName}" --schedule "${trimmed}" --payload "${payload.replace(/"/g, '\\"')}"`, 10000);
+    cronCache.time = 0;
+    res.json({ ok: true, name: safeName });
+  } catch (err) {
+    if (err.message && (err.message.includes('not found') || err.message.includes('ENOENT'))) {
+      return res.status(501).json({ error: 'not_supported' });
+    }
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// T97 — DELETE /api/cron/:id
+app.delete('/api/cron/:id', requirePro, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id || !/^[a-zA-Z0-9._:-]+$/.test(id)) {
+      return res.status(400).json({ ok: false, error: 'Invalid cron job ID' });
+    }
+    // Verify job exists by checking cached list or fetching fresh
+    let jobs = cronCache.data;
+    if (!jobs || Date.now() - cronCache.time >= CRON_CACHE_TTL) {
+      const out = await run('openclaw cron list --json', 10000);
+      if (!out) return res.status(501).json({ error: 'not_supported' });
+      try { jobs = JSON.parse(out); } catch { jobs = []; }
+      if (!Array.isArray(jobs)) jobs = jobs.jobs || jobs.crons || [];
+    }
+    const exists = Array.isArray(jobs) && jobs.some(j => (j.id || j.name) === id);
+    if (!exists) {
+      return res.status(404).json({ ok: false, error: 'Cron job not found' });
+    }
+    await run(`openclaw cron remove ${id}`, 10000);
+    cronCache.time = 0;
+    res.json({ ok: true, id });
+  } catch (err) {
+    if (err.message && (err.message.includes('not found') || err.message.includes('ENOENT'))) {
+      return res.status(501).json({ error: 'not_supported' });
+    }
+    res.status(404).json({ ok: false, error: 'Cron job not found' });
   }
 });
 
