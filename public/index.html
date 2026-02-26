@@ -2002,6 +2002,7 @@
       var key = opts.instanceKey || canvasEl.id || canvasEl.getAttribute('data-chart-key');
       var unit = opts.unit || '';
       var isBytes = opts.isBytes || false;
+      var hours = opts.hours || 24;
 
       if (_chartInstances[key]) {
         _chartInstances[key].destroy();
@@ -2059,7 +2060,7 @@
               callbacks: {
                 title: function(items) {
                   if (!items.length) return '';
-                  return new Date(items[0].label).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+                  return new Date(items[0].parsed.x).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
                 },
                 label: function(item) {
                   var val = item.parsed.y;
@@ -2072,12 +2073,21 @@
           scales: {
             x: {
               type: 'linear',
+              min: Date.now() - hours * 60 * 60 * 1000,
+              max: Date.now(),
               ticks: {
                 color: '#475569',
                 font: { size: 10, family: 'JetBrains Mono' },
                 maxTicksLimit: 8,
                 callback: function(val) {
-                  return new Date(val).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+                  var d = new Date(val);
+                  if (hours <= 24) {
+                    return d.toLocaleString('en-GB', { hour: '2-digit', minute: '2-digit' });
+                  } else if (hours <= 168) {
+                    return d.toLocaleString('en-GB', { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+                  } else {
+                    return d.toLocaleString('en-GB', { day: 'numeric', month: 'short' });
+                  }
                 }
               },
               grid: { color: '#ffffff08' }
@@ -2269,7 +2279,8 @@
               { data: dataDown, color: '#c084fc', label: 'Download' }
             ],
             isBytes: true,
-            instanceKey: 'modal'
+            instanceKey: 'modal',
+            hours: hours
           });
         } else {
           var res = await fetch('/api/history?metric=' + cfg.metric + '&hours=' + hours);
@@ -2278,7 +2289,8 @@
             label: cfg.label,
             unit: cfg.unit || '',
             isBytes: false,
-            instanceKey: 'modal'
+            instanceKey: 'modal',
+            hours: hours
           });
         }
       } catch (err) {

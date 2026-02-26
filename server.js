@@ -1113,16 +1113,30 @@ app.get('/api/history', async (req, res) => {
       if (err.code === 'ENOENT') return res.json([]);
       throw err;
     }
-    const result = [];
+    // Bucket size: 5min for 24h, 1h for 7d, 4h for 30d
+    const bucketMs = hours <= 24 ? 5 * 60 * 1000
+                   : hours <= 168 ? 60 * 60 * 1000
+                   : 4 * 60 * 60 * 1000;
+
+    const buckets = new Map();
     for (const line of raw.split('\n')) {
       if (!line) continue;
       try {
         const entry = JSON.parse(line);
         if (entry.ts >= cutoff) {
-          result.push({ ts: entry.ts, value: entry[metric] ?? 0 });
+          const bucket = Math.floor(entry.ts / bucketMs) * bucketMs;
+          if (!buckets.has(bucket)) buckets.set(bucket, { sum: 0, count: 0 });
+          const b = buckets.get(bucket);
+          b.sum += entry[metric] ?? 0;
+          b.count++;
         }
       } catch {}
     }
+
+    const result = Array.from(buckets.entries())
+      .sort((a, b) => a[0] - b[0])
+      .map(([ts, b]) => ({ ts: ts + bucketMs / 2, value: Math.round(b.sum / b.count * 10) / 10 }));
+
     res.json(result);
   } catch (err) {
     console.error('GET /api/history error:', err.message);
