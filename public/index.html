@@ -6,6 +6,8 @@
   <title>Pulse</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <!-- T53 — Chart.js 4.x from CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
   <style>
     :root {
       --bg: #0f1117;
@@ -817,6 +819,98 @@
       background: var(--cyan-glow);
     }
 
+    /* === SPARKLINE & EXPANDED CHART (T54-T62) === */
+    .sparkline-wrap {
+      margin-top: 12px;
+      cursor: pointer;
+      position: relative;
+      height: 40px;
+    }
+
+    .sparkline-wrap canvas {
+      display: block;
+      width: 100% !important;
+      height: 40px !important;
+    }
+
+    .sparkline-empty {
+      margin-top: 12px;
+      font-size: 11px;
+      color: var(--text-muted);
+      font-style: italic;
+      text-align: center;
+      padding: 8px 0;
+    }
+
+    /* Expanded card state */
+    .card.expanded {
+      grid-column: 1 / -1;
+      z-index: 10;
+    }
+
+    .expanded-chart-wrap {
+      margin-top: 16px;
+      position: relative;
+    }
+
+    .expanded-chart-wrap canvas {
+      display: block;
+      width: 100% !important;
+      height: 220px !important;
+    }
+
+    .chart-time-tabs {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 10px;
+    }
+
+    .chart-time-tab {
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
+      padding: 3px 10px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      background: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: border-color 0.2s, color 0.2s, background 0.2s;
+    }
+
+    .chart-time-tab:hover {
+      border-color: var(--border-hover);
+      color: var(--text-dim);
+    }
+
+    .chart-time-tab.active {
+      background: var(--cyan-dim);
+      border-color: var(--cyan-dim);
+      color: var(--cyan);
+    }
+
+    .chart-close-btn {
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: border-color 0.2s, color 0.2s;
+    }
+
+    .chart-close-btn:hover {
+      border-color: var(--border-hover);
+      color: var(--cyan);
+    }
+
     /* === RESPONSIVE === */
     @media (max-width: 900px) {
       body { padding: 12px; }
@@ -908,6 +1002,7 @@
         <div class="progress-wrap">
           <div class="progress-bar" id="cpu-bar" style="width:0%"></div>
         </div>
+        <div id="sparkline-cpu-wrap"></div>
       </div>
 
       <!-- RAM -->
@@ -918,6 +1013,7 @@
         <div class="progress-wrap">
           <div class="progress-bar" id="ram-bar" style="width:0%"></div>
         </div>
+        <div id="sparkline-ram-wrap"></div>
       </div>
 
       <!-- Disk -->
@@ -928,6 +1024,7 @@
         <div class="progress-wrap">
           <div class="progress-bar" id="disk-bar" style="width:0%"></div>
         </div>
+        <div id="sparkline-disk-wrap"></div>
       </div>
 
       <!-- Network -->
@@ -943,6 +1040,7 @@
             <div class="net-item-value" id="net-up">--</div>
           </div>
         </div>
+        <div id="sparkline-net-wrap"></div>
       </div>
     </div>
 
@@ -1586,6 +1684,404 @@
     document.getElementById('log-maximize-btn').addEventListener('click', function() {
       document.getElementById('log-drawer').classList.toggle('maximized');
     });
+
+    // ============================================================
+    // T54-T62: Historical Charts (Phase 5)
+    // ============================================================
+
+    // Chart instance registry (for cleanup)
+    const _chartInstances = {};
+
+    // T54 — Reusable sparkline renderer
+    function renderSparkline(canvasEl, data, options) {
+      var opts = options || {};
+      var color = opts.color || '#22d3ee';
+      var key = canvasEl.id || canvasEl.getAttribute('data-chart-key');
+
+      // Destroy previous chart instance if exists
+      if (_chartInstances[key]) {
+        _chartInstances[key].destroy();
+        delete _chartInstances[key];
+      }
+
+      var labels = data.map(function(d) { return d.ts; });
+      var values = data.map(function(d) { return d.value; });
+
+      var datasets = [];
+      if (opts.datasets) {
+        // Multi-line (e.g. network)
+        opts.datasets.forEach(function(ds) {
+          datasets.push({
+            data: ds.data.map(function(d) { return d.value; }),
+            borderColor: ds.color,
+            borderWidth: 1.5,
+            pointRadius: 0,
+            tension: 0.4,
+            fill: false
+          });
+        });
+        labels = opts.datasets[0].data.map(function(d) { return d.ts; });
+      } else {
+        datasets.push({
+          data: values,
+          borderColor: color,
+          borderWidth: 1.5,
+          pointRadius: 0,
+          tension: 0.4,
+          fill: false
+        });
+      }
+
+      _chartInstances[key] = new Chart(canvasEl, {
+        type: 'line',
+        data: { labels: labels, datasets: datasets },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false }, tooltip: { enabled: false } },
+          scales: {
+            x: { display: false },
+            y: { display: false }
+          },
+          interaction: { enabled: false },
+          animation: { duration: 0 }
+        }
+      });
+    }
+
+    // T54 — Render full expanded chart with axes, tooltip
+    function renderFullChart(canvasEl, data, options) {
+      var opts = options || {};
+      var color = opts.color || '#22d3ee';
+      var key = canvasEl.id || canvasEl.getAttribute('data-chart-key');
+      var unit = opts.unit || '';
+      var isBytes = opts.isBytes || false;
+
+      if (_chartInstances[key]) {
+        _chartInstances[key].destroy();
+        delete _chartInstances[key];
+      }
+
+      var datasets = [];
+      var labels;
+      if (opts.datasets) {
+        labels = opts.datasets[0].data.map(function(d) { return d.ts; });
+        opts.datasets.forEach(function(ds) {
+          datasets.push({
+            label: ds.label || '',
+            data: ds.data.map(function(d) { return d.value; }),
+            borderColor: ds.color,
+            borderWidth: 2,
+            pointRadius: 0,
+            pointHitRadius: 8,
+            tension: 0.4,
+            fill: false
+          });
+        });
+      } else {
+        labels = data.map(function(d) { return d.ts; });
+        datasets.push({
+          label: opts.label || '',
+          data: data.map(function(d) { return d.value; }),
+          borderColor: color,
+          borderWidth: 2,
+          pointRadius: 0,
+          pointHitRadius: 8,
+          tension: 0.4,
+          fill: false
+        });
+      }
+
+      _chartInstances[key] = new Chart(canvasEl, {
+        type: 'line',
+        data: { labels: labels, datasets: datasets },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: !!opts.datasets, labels: { color: '#94a3b8', font: { size: 11, family: 'JetBrains Mono' } } },
+            tooltip: {
+              enabled: true,
+              backgroundColor: '#1c2030',
+              borderColor: '#ffffff20',
+              borderWidth: 1,
+              titleColor: '#94a3b8',
+              bodyColor: '#e2e8f0',
+              titleFont: { size: 11, family: 'JetBrains Mono' },
+              bodyFont: { size: 12, family: 'JetBrains Mono' },
+              padding: 8,
+              callbacks: {
+                title: function(items) {
+                  if (!items.length) return '';
+                  return new Date(items[0].label).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+                },
+                label: function(item) {
+                  var val = item.parsed.y;
+                  if (isBytes) return (item.dataset.label ? item.dataset.label + ': ' : '') + formatBytesClient(val);
+                  return (item.dataset.label ? item.dataset.label + ': ' : '') + val + unit;
+                }
+              }
+            }
+          },
+          scales: {
+            x: {
+              type: 'linear',
+              ticks: {
+                color: '#475569',
+                font: { size: 10, family: 'JetBrains Mono' },
+                maxTicksLimit: 8,
+                callback: function(val) {
+                  return new Date(val).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+                }
+              },
+              grid: { color: '#ffffff08' }
+            },
+            y: {
+              ticks: {
+                color: '#475569',
+                font: { size: 10, family: 'JetBrains Mono' },
+                callback: function(val) {
+                  if (isBytes) return formatBytesClient(val);
+                  return val + unit;
+                }
+              },
+              grid: { color: '#ffffff08' },
+              beginAtZero: true
+            }
+          },
+          animation: { duration: 300 }
+        }
+      });
+    }
+
+    // Format bytes for display (client-side)
+    function formatBytesClient(bytes) {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+      if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+      return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
+    }
+
+    // Sparkline config per card
+    var _sparkConfigs = {
+      cpu:  { metric: 'cpu',  wrapId: 'sparkline-cpu-wrap',  cardId: 'card-cpu',  label: 'CPU',     unit: '%' },
+      ram:  { metric: 'ram',  wrapId: 'sparkline-ram-wrap',  cardId: 'card-ram',  label: 'RAM',     unit: '%' },
+      disk: { metric: 'disk', wrapId: 'sparkline-disk-wrap', cardId: 'card-disk', label: 'Disk',    unit: '%' },
+      net:  { metric: 'net',  wrapId: 'sparkline-net-wrap',  cardId: 'card-net',  label: 'Network', isNet: true }
+    };
+
+    // Track expanded state
+    var _expandedCard = null;
+
+    // T55-T58 — Load sparklines on page load
+    async function loadSparklines() {
+      for (var key in _sparkConfigs) {
+        await loadSparkline(key);
+      }
+    }
+
+    async function loadSparkline(key) {
+      var cfg = _sparkConfigs[key];
+      var wrap = document.getElementById(cfg.wrapId);
+      if (!wrap) return;
+
+      // Don't overwrite if card is expanded
+      if (_expandedCard === cfg.cardId) return;
+
+      try {
+        if (cfg.isNet) {
+          // T58 — Network: two lines
+          var resUp = await fetch('/api/history?metric=netUp&hours=24');
+          var resDown = await fetch('/api/history?metric=netDown&hours=24');
+          var dataUp = await resUp.json();
+          var dataDown = await resDown.json();
+
+          if (dataUp.length === 0 && dataDown.length === 0) {
+            showEmptyState(wrap);
+            return;
+          }
+
+          wrap.replaceChildren();
+          wrap.className = 'sparkline-wrap';
+          var canvas = document.createElement('canvas');
+          canvas.id = 'sparkline-' + key;
+          canvas.setAttribute('data-chart-key', 'sparkline-' + key);
+          canvas.width = 300;
+          canvas.height = 40;
+          wrap.appendChild(canvas);
+          renderSparkline(canvas, [], {
+            datasets: [
+              { data: dataUp, color: '#22d3ee', label: 'Upload' },
+              { data: dataDown, color: '#c084fc', label: 'Download' }
+            ]
+          });
+        } else {
+          var res = await fetch('/api/history?metric=' + cfg.metric + '&hours=24');
+          var data = await res.json();
+
+          if (data.length === 0) {
+            showEmptyState(wrap);
+            return;
+          }
+
+          wrap.replaceChildren();
+          wrap.className = 'sparkline-wrap';
+          var canvas = document.createElement('canvas');
+          canvas.id = 'sparkline-' + key;
+          canvas.setAttribute('data-chart-key', 'sparkline-' + key);
+          canvas.width = 300;
+          canvas.height = 40;
+          wrap.appendChild(canvas);
+          renderSparkline(canvas, data);
+        }
+
+        // T59 — Click to expand
+        wrap.onclick = function() { toggleExpand(key); };
+      } catch (err) {
+        console.error('Sparkline load error (' + key + '):', err);
+      }
+    }
+
+    // T62 — Empty state
+    function showEmptyState(wrap) {
+      wrap.replaceChildren();
+      wrap.className = '';
+      var msg = document.createElement('div');
+      msg.className = 'sparkline-empty';
+      msg.textContent = 'Collecting data\u2026';
+      wrap.appendChild(msg);
+      wrap.onclick = null;
+    }
+
+    // T59-T61 — Expand/collapse card
+    function toggleExpand(key) {
+      var cfg = _sparkConfigs[key];
+      var card = document.getElementById(cfg.cardId);
+
+      // T61 — If already expanded, collapse
+      if (_expandedCard === cfg.cardId) {
+        collapseCard(key);
+        return;
+      }
+
+      // Collapse any other expanded card first
+      if (_expandedCard) {
+        for (var k in _sparkConfigs) {
+          if (_sparkConfigs[k].cardId === _expandedCard) {
+            collapseCard(k);
+            break;
+          }
+        }
+      }
+
+      _expandedCard = cfg.cardId;
+      card.classList.add('expanded');
+
+      // Build expanded chart area
+      var wrap = document.getElementById(cfg.wrapId);
+      wrap.className = '';
+      wrap.onclick = null;
+      wrap.replaceChildren();
+
+      var chartWrap = document.createElement('div');
+      chartWrap.className = 'expanded-chart-wrap';
+
+      // T60 — Time range tabs
+      var tabs = document.createElement('div');
+      tabs.className = 'chart-time-tabs';
+      var ranges = [
+        { label: '24h', hours: 24 },
+        { label: '7d', hours: 168 },
+        { label: '30d', hours: 720 }
+      ];
+      ranges.forEach(function(r, i) {
+        var tab = document.createElement('button');
+        tab.className = 'chart-time-tab' + (i === 0 ? ' active' : '');
+        tab.textContent = r.label;
+        tab.onclick = function() {
+          tabs.querySelectorAll('.chart-time-tab').forEach(function(t) { t.classList.remove('active'); });
+          tab.classList.add('active');
+          loadExpandedChart(key, r.hours);
+        };
+        tabs.appendChild(tab);
+      });
+
+      // T61 — Close button
+      var closeBtn = document.createElement('button');
+      closeBtn.className = 'chart-close-btn';
+      closeBtn.title = 'Collapse';
+      closeBtn.textContent = '\u00D7';
+      closeBtn.onclick = function(e) { e.stopPropagation(); collapseCard(key); };
+
+      var canvas = document.createElement('canvas');
+      canvas.id = 'expanded-' + key;
+      canvas.setAttribute('data-chart-key', 'expanded-' + key);
+      canvas.width = 800;
+      canvas.height = 220;
+
+      chartWrap.append(tabs, closeBtn, canvas);
+      wrap.appendChild(chartWrap);
+
+      // Load 24h by default
+      loadExpandedChart(key, 24);
+    }
+
+    // T60 — Load expanded chart data for a given time range
+    async function loadExpandedChart(key, hours) {
+      var cfg = _sparkConfigs[key];
+      var canvas = document.getElementById('expanded-' + key);
+      if (!canvas) return;
+
+      try {
+        if (cfg.isNet) {
+          var resUp = await fetch('/api/history?metric=netUp&hours=' + hours);
+          var resDown = await fetch('/api/history?metric=netDown&hours=' + hours);
+          var dataUp = await resUp.json();
+          var dataDown = await resDown.json();
+
+          renderFullChart(canvas, [], {
+            datasets: [
+              { data: dataUp, color: '#22d3ee', label: 'Upload' },
+              { data: dataDown, color: '#c084fc', label: 'Download' }
+            ],
+            isBytes: true
+          });
+        } else {
+          var res = await fetch('/api/history?metric=' + cfg.metric + '&hours=' + hours);
+          var data = await res.json();
+          renderFullChart(canvas, data, {
+            label: cfg.label,
+            unit: cfg.unit || '',
+            isBytes: false
+          });
+        }
+      } catch (err) {
+        console.error('Expanded chart load error (' + key + '):', err);
+      }
+    }
+
+    // T61 — Collapse card back to sparkline
+    function collapseCard(key) {
+      var cfg = _sparkConfigs[key];
+      var card = document.getElementById(cfg.cardId);
+      card.classList.remove('expanded');
+
+      // Clean up expanded chart instance
+      var expandedKey = 'expanded-' + key;
+      if (_chartInstances[expandedKey]) {
+        _chartInstances[expandedKey].destroy();
+        delete _chartInstances[expandedKey];
+      }
+
+      _expandedCard = null;
+      // Reload sparkline
+      loadSparkline(key);
+    }
+
+    // Load sparklines on page load
+    loadSparklines();
+    // Reload sparklines every 5 minutes (aligned with history collection)
+    setInterval(loadSparklines, 5 * 60 * 1000);
 
     // --- T17-T20: Alert bell + dropdown ---
     let alertDropdownOpen = false;

@@ -1,7 +1,7 @@
 # Pulse — Task Breakdown
 
 **Last updated:** 2026-02-26  
-**Total tasks:** 76 (48 done · 28 todo)
+**Total tasks:** 76 (62 done · 14 todo)
 
 Legend: `[ ]` todo · `[~]` in progress · `[x]` done
 
@@ -82,20 +82,20 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done
 
 ## Phase 5 — Historical Charts (F09)
 
-- [ ] T49 History collector — background interval every 5 min, appends JSON line to `data/history.jsonl`
-- [ ] T50 Data schema — `{ ts, cpu, ram, disk, netUp, netDown }` per sample
-- [ ] T51 30-day pruning — on each write, remove entries older than 30 days
-- [ ] T52 `GET /api/history?metric=cpu&hours=168` — reads jsonl, filters by time range, returns array
-- [ ] T53 Chart.js from CDN — add to `index.html`, no npm
-- [ ] T54 Sparkline component — reusable function `renderSparkline(canvasEl, data)`, mini line chart, cyan
-- [ ] T55 Sparkline on CPU card — last 24h of CPU%, rendered in card footer
-- [ ] T56 Sparkline on RAM card
-- [ ] T57 Sparkline on Disk card
-- [ ] T58 Sparkline on Network card (upload + download as two lines)
-- [ ] T59 Card expand on sparkline click — card expands to full-width, shows full Chart.js chart
-- [ ] T60 Full chart time range toggle — `24h · 7d · 30d` tabs
-- [ ] T61 Card collapse — click again to restore original size
-- [ ] T62 History starts empty — graceful empty state while data accumulates ("Collecting data…")
+- [x] T49 History collector — background interval every 5 min, appends JSON line to `data/history.jsonl`
+- [x] T50 Data schema — `{ ts, cpu, ram, disk, netUp, netDown }` per sample
+- [x] T51 30-day pruning — on each write, remove entries older than 30 days
+- [x] T52 `GET /api/history?metric=cpu&hours=168` — reads jsonl, filters by time range, returns array
+- [x] T53 Chart.js from CDN — add to `index.html`, no npm
+- [x] T54 Sparkline component — reusable function `renderSparkline(canvasEl, data)`, mini line chart, cyan
+- [x] T55 Sparkline on CPU card — last 24h of CPU%, rendered in card footer
+- [x] T56 Sparkline on RAM card
+- [x] T57 Sparkline on Disk card
+- [x] T58 Sparkline on Network card (upload + download as two lines)
+- [x] T59 Card expand on sparkline click — card expands to full-width, shows full Chart.js chart
+- [x] T60 Full chart time range toggle — `24h · 7d · 30d` tabs
+- [x] T61 Card collapse — click again to restore original size
+- [x] T62 History starts empty — graceful empty state while data accumulates ("Collecting data…")
 
 ---
 

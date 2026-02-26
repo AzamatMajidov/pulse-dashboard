@@ -596,6 +596,65 @@ function formatBytes(bytes) {
 }
 
 // ============================================================
+// T49-T51: History Collector (Phase 5)
+// ============================================================
+
+const HISTORY_FILE = path.join(__dirname, 'data', 'history.jsonl');
+const HISTORY_INTERVAL = 5 * 60 * 1000; // 5 minutes
+const HISTORY_MAX_AGE = 30 * 24 * 60 * 60 * 1000; // 30 days
+
+// T49 — Collect a snapshot and append to history.jsonl
+async function collectHistorySample() {
+  try {
+    const [cpu, ram, disk, netStats] = await Promise.all([
+      getCpuUsage(), getRam(), getDisk(), readNetStats()
+    ]);
+    // T50 — Data schema
+    const sample = {
+      ts: Date.now(),
+      cpu: cpu ?? 0,
+      ram: ram?.percent ?? 0,
+      disk: disk?.percent ?? 0,
+      netUp: netStats?.tx ?? 0,
+      netDown: netStats?.rx ?? 0
+    };
+    const dir = path.dirname(HISTORY_FILE);
+    await fs.promises.mkdir(dir, { recursive: true });
+    await fs.promises.appendFile(HISTORY_FILE, JSON.stringify(sample) + '\n');
+    // T51 — Prune entries older than 30 days
+    await pruneHistory();
+  } catch (err) {
+    console.error('History collector error:', err.message);
+  }
+}
+
+// T51 — Remove entries older than 30 days
+async function pruneHistory() {
+  try {
+    const raw = await fs.promises.readFile(HISTORY_FILE, 'utf8');
+    const cutoff = Date.now() - HISTORY_MAX_AGE;
+    const lines = raw.split('\n').filter(Boolean);
+    const kept = lines.filter(line => {
+      try { return JSON.parse(line).ts >= cutoff; } catch { return false; }
+    });
+    if (kept.length < lines.length) {
+      await fs.promises.writeFile(HISTORY_FILE, kept.join('\n') + '\n');
+    }
+  } catch (err) {
+    if (err.code !== 'ENOENT') console.error('History prune error:', err.message);
+  }
+}
+
+function startHistoryCollector() {
+  // Collect first sample after a short delay (let metrics settle)
+  setTimeout(() => {
+    collectHistorySample();
+    setInterval(collectHistorySample, HISTORY_INTERVAL);
+  }, 10000);
+  console.log('📊 History collector started (every 5 min)');
+}
+
+// ============================================================
 // API Routes
 // ============================================================
 
@@ -861,6 +920,40 @@ app.post('/api/openclaw/clear-sessions', async (req, res) => {
   }
 });
 
+// T52 — GET /api/history — historical metric data
+app.get('/api/history', async (req, res) => {
+  try {
+    const metric = req.query.metric;
+    const hours = parseInt(req.query.hours) || 168; // default 7 days
+    const validMetrics = ['cpu', 'ram', 'disk', 'netUp', 'netDown'];
+    if (!metric || !validMetrics.includes(metric)) {
+      return res.status(400).json({ error: 'Invalid metric. Use: ' + validMetrics.join(', ') });
+    }
+    const cutoff = Date.now() - hours * 60 * 60 * 1000;
+    let raw;
+    try {
+      raw = await fs.promises.readFile(HISTORY_FILE, 'utf8');
+    } catch (err) {
+      if (err.code === 'ENOENT') return res.json([]);
+      throw err;
+    }
+    const result = [];
+    for (const line of raw.split('\n')) {
+      if (!line) continue;
+      try {
+        const entry = JSON.parse(line);
+        if (entry.ts >= cutoff) {
+          result.push({ ts: entry.ts, value: entry[metric] ?? 0 });
+        }
+      } catch {}
+    }
+    res.json(result);
+  } catch (err) {
+    console.error('GET /api/history error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // T48 — Strip ANSI escape codes from log lines
 function stripAnsi(str) {
   return str.replace(/\x1b\[[0-9;]*m/g, '');
@@ -1010,6 +1103,7 @@ async function start() {
           .catch(err => console.error('Bot cache warmup failed:', err.message));
       }
       startAlertWorker();
+      startHistoryCollector();
     }
   });
 
