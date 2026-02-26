@@ -1,7 +1,7 @@
 # Pulse — Task Breakdown
 
 **Last updated:** 2026-02-26
-**Total tasks:** 76 (71 done · 5 todo)
+**Total tasks:** 84 (71 done · 13 todo)
 
 Legend: `[ ]` todo · `[~]` in progress · `[x]` done
 
@@ -123,6 +123,29 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done
 
 ---
 
+## Phase 8 — Bot Analytics (F16)
+
+### Backend — Data Collection
+- [ ] T77 Session tracker — on each `GET /api/metrics` that returns bot data, parse `openclaw status` output to extract: session start time, message count today, heartbeat count, last heartbeat time, next heartbeat ETA. Store in `data/bot-stats.json` (per bot key, refreshed with bot cache).
+- [ ] T78 Response time tracker — new SSE listener on OpenClaw gateway logs (`journalctl -u openclaw-gateway -f`). Parse inbound→response pairs, compute rolling average response time (last 1h). Store in `data/bot-stats.json`.
+- [ ] T79 `GET /api/bots/stats` — returns per-bot stats: `{ messagesToday, avgResponseMs, heartbeats, nextBeatSecs, sessionStarted }`. Falls back to `openclaw status --json` if available, otherwise parses text output.
+- [ ] T80 Daily reset — at midnight (local time), reset `messagesToday` and `heartbeats` counters to 0. Use a background interval check (same pattern as history collector).
+
+### Frontend — Bot Card Enhancement
+- [ ] T81 Stats row in bot card — below the existing Model/LastActive/Uptime stats, add a second row: `Messages Today: 47 | Avg Response: 2.3s`
+- [ ] T82 Heartbeat indicator — small pulsing heart icon (💓) with beat count and "Next: 14m" countdown. Updates every 10s with dashboard refresh.
+- [ ] T83 Session info — "Session started: 10:31 AM" line in bot card, derived from `sessionStarted` timestamp.
+- [ ] T84 Mini activity sparkline — tiny inline sparkline (50x20px) in bot card showing message count per hour over last 24h. Reuse `renderSparkline()` from Phase 5.
+
+### Technical Notes
+- `openclaw status` already returns: gateway reachable, active time, model. Need to check if `--json` flag exists for structured output, otherwise regex parse.
+- Message count: parse from OpenClaw session logs or gateway metrics if exposed. Fallback: count inbound webhook hits via a lightweight middleware counter.
+- Response time: measure time between gateway receiving a message and sending the reply. Parse from journalctl timestamps.
+- Heartbeat data: OpenClaw fires heartbeats on a schedule. Parse `HEARTBEAT.md` interval + last execution from gateway logs.
+- `data/bot-stats.json` schema: `{ "main": { "messagesToday": 47, "avgResponseMs": 2300, "heartbeats": 12, "nextBeatSecs": 840, "sessionStarted": "2026-02-26T05:31:00Z", "hourlyMessages": [0,0,1,3,5,...] }, "personal": { ... } }`
+
+---
+
 ## Summary by Phase
 
 | Phase | Tasks | Description |
@@ -134,5 +157,6 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done
 | 5 — History | T49–T62 | Sparklines + historical charts |
 | 6 — License | T63–T71 | Paywall + license management |
 | 7 — Distribution | T72–T76 | Landing page + ClawhHub + ProductHunt |
+| 8 — Bot Analytics | T77–T84 | Message count, response time, heartbeats, session info |
 
-**Total: 76 tasks**
+**Total: 84 tasks (71 done · 13 todo)**
