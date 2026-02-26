@@ -90,7 +90,7 @@
 
     .hero-left { display: flex; flex-direction: column; gap: 2px; }
     .hero-center { text-align: center; }
-    .hero-right { display: flex; justify-content: flex-end; }
+    .hero-right { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
 
     .hero-title {
       font-size: 13px;
@@ -122,32 +122,73 @@
       letter-spacing: 0.05em;
     }
 
-    .weather-widget {
+    .weather-pill {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 8px;
       background: var(--bg3);
       border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      padding: 12px 20px;
+      border-radius: 20px;
+      padding: 8px 16px;
     }
 
-    .weather-icon { font-size: 28px; }
+    .weather-pill .weather-icon { font-size: 20px; line-height: 1; }
 
-    .weather-info { display: flex; flex-direction: column; }
-
-    .weather-temp {
-      font-size: 22px;
+    .weather-pill .weather-text {
+      font-size: 13px;
       font-weight: 600;
       color: var(--text);
-      line-height: 1;
     }
 
-    .weather-desc {
-      font-size: 12px;
-      color: var(--text-dim);
-      margin-top: 2px;
+    .action-pill {
+      display: flex;
+      align-items: center;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 4px;
+      gap: 0;
     }
+
+    .action-pill .pill-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 34px;
+      height: 34px;
+      border-radius: 16px;
+      border: none;
+      background: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 16px;
+      transition: background 0.2s, color 0.2s;
+      position: relative;
+    }
+
+    .action-pill .pill-btn:hover {
+      background: rgba(255,255,255,0.08);
+      color: var(--cyan);
+    }
+
+    .action-pill .pill-divider {
+      width: 1px;
+      height: 20px;
+      background: var(--border);
+    }
+
+    .tier-dot {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      border: 1.5px solid var(--card-bg);
+    }
+
+    .tier-dot.free { background: #f59e0b; }
+    .tier-dot.pro { background: #22c55e; }
 
     /* === SECTION HEADER === */
     .section-header {
@@ -1033,26 +1074,30 @@
         <div id="date">Loading...</div>
       </div>
       <div class="hero-right">
-        <div class="weather-widget">
-          <div class="weather-icon" id="weather-icon">🌡️</div>
-          <div class="weather-info">
-            <div class="weather-temp"><span id="weather-temp">--</span>°C</div>
-            <div class="weather-desc" id="weather-desc">--</div>
-          </div>
+        <!-- Weather Pill -->
+        <div class="weather-pill">
+          <span class="weather-icon" id="weather-icon">🌡️</span>
+          <span class="weather-text"><span id="weather-temp">--</span>°C</span>
         </div>
-        <span class="tier-badge free" id="tier-badge" style="margin-left:12px;display:none">Free</span>
-        <div style="position:relative;margin-left:12px" id="alert-bell-wrap">
-          <button id="alert-bell" onclick="toggleAlertDropdown()" title="Alerts" style="display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:8px;border:1px solid var(--border);color:var(--text-muted);background:none;cursor:pointer;font-size:16px;transition:border-color 0.2s,color 0.2s;position:relative" onmouseover="this.style.borderColor='var(--border-hover)';this.style.color='var(--cyan)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-muted)'">🔔
-            <span id="alert-badge" style="display:none;position:absolute;top:-5px;right:-5px;background:#f87171;color:#000;font-size:10px;font-weight:700;min-width:16px;height:16px;border-radius:8px;display:none;align-items:center;justify-content:center;padding:0 3px;font-family:'Inter',sans-serif">0</span>
+        <!-- Action Pill -->
+        <div class="action-pill" id="alert-bell-wrap">
+          <button class="pill-btn" id="alert-bell" onclick="toggleAlertDropdown()" title="Alerts">
+            🔔
+            <span class="tier-dot" id="tier-dot" style="display:none"></span>
+            <span id="alert-badge" style="display:none;position:absolute;top:0;right:0;background:#f87171;color:#000;font-size:9px;font-weight:700;min-width:14px;height:14px;border-radius:7px;align-items:center;justify-content:center;padding:0 2px;font-family:'Inter',sans-serif">0</span>
           </button>
-          <div id="alert-dropdown" style="display:none;position:absolute;right:0;top:40px;width:300px;background:var(--bg2);border:1px solid var(--border);border-radius:12px;box-shadow:0 8px 32px #0008;z-index:100;overflow:hidden">
+          <div class="pill-divider"></div>
+          <a class="pill-btn" href="/settings" title="Settings" style="text-decoration:none">⚙️</a>
+          <!-- Alert Dropdown -->
+          <div id="alert-dropdown" style="display:none;position:absolute;right:0;top:48px;width:300px;background:var(--bg2);border:1px solid var(--border);border-radius:12px;box-shadow:0 8px 32px #0008;z-index:100;overflow:hidden">
             <div style="padding:12px 14px;border-bottom:1px solid var(--border);font-size:12px;font-weight:600;color:var(--text-dim);letter-spacing:.06em;text-transform:uppercase">Recent Alerts</div>
             <div id="alert-list" style="max-height:280px;overflow-y:auto;padding:8px 0">
               <div style="padding:16px 14px;font-size:13px;color:var(--text-muted);text-align:center">No alerts</div>
             </div>
           </div>
         </div>
-        <a href="/settings" title="Settings" style="display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:8px;border:1px solid var(--border);color:var(--text-muted);text-decoration:none;font-size:16px;margin-left:8px;transition:border-color 0.2s,color 0.2s" onmouseover="this.style.borderColor='var(--border-hover)';this.style.color='var(--cyan)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-muted)'">⚙</a>
+        <!-- Hidden tier badge for JS reference -->
+        <span id="tier-badge" style="display:none"></span>
       </div>
     </div>
 
@@ -1621,7 +1666,10 @@
         // Weather
         document.getElementById('weather-icon').textContent = d.weather?.icon || '🌡️';
         document.getElementById('weather-temp').textContent = d.weather?.temp ?? '--';
-        document.getElementById('weather-desc').textContent = d.weather?.description || '--';
+        var descEl = document.getElementById('weather-desc');
+        if (descEl) descEl.textContent = d.weather?.description || '--';
+        var wp = document.querySelector('.weather-pill');
+        if (wp) wp.title = d.weather?.description || '';
 
         // CPU
         const cpuPct = d.system?.cpu?.usage ?? 0;
@@ -2243,17 +2291,17 @@
       try {
         const res = await fetch('/api/license/status');
         const data = await res.json();
-        const badge = document.getElementById('tier-badge');
+        const dot = document.getElementById('tier-dot');
         _isProTier = data.valid && data.tier === 'pro';
-        badge.style.display = 'inline-block';
+        dot.style.display = 'block';
         if (_isProTier) {
-          badge.textContent = 'Pro';
-          badge.className = 'tier-badge pro';
+          dot.className = 'tier-dot pro';
         } else {
-          badge.textContent = 'Free';
-          badge.className = 'tier-badge free';
-          badge.style.cursor = 'pointer';
-          badge.onclick = showUpgradeModal;
+          dot.className = 'tier-dot free';
+          // Make bell click show upgrade modal on free tier
+          var bell = document.getElementById('alert-bell');
+          var origClick = bell.onclick;
+          bell.onclick = function(e) { showUpgradeModal(); };
         }
         applyProGate();
       } catch {}
@@ -2293,11 +2341,11 @@
         + '</div>'
         + '<div style="display:flex;gap:12px;justify-content:center;margin-bottom:20px">'
         + '<div style="background:var(--cyan-dim);border:1px solid var(--cyan);border-radius:8px;padding:12px 20px">'
-        + '<div style="color:var(--cyan);font-size:20px;font-weight:700">$7<span style="font-size:12px;font-weight:400">/mo</span></div>'
+        + '<div style="color:var(--cyan);font-size:20px;font-weight:700">$3<span style="font-size:12px;font-weight:400">/mo</span></div>'
         + '</div>'
         + '<div style="background:var(--cyan-dim);border:1px solid var(--cyan);border-radius:8px;padding:12px 20px">'
-        + '<div style="color:var(--cyan);font-size:20px;font-weight:700">$49<span style="font-size:12px;font-weight:400">/yr</span></div>'
-        + '<div style="color:var(--text-muted);font-size:10px">Save 42%</div>'
+        + '<div style="color:var(--cyan);font-size:20px;font-weight:700">$19<span style="font-size:12px;font-weight:400">/yr</span></div>'
+        + '<div style="color:var(--text-muted);font-size:10px">Save 47%</div>'
         + '</div>'
         + '</div>'
         + '<a href="https://github.com/AzamatMajidov/pulse-dashboard#pro" target="_blank" '

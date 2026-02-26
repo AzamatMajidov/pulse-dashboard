@@ -149,7 +149,7 @@ Pulse is free for basic monitoring. **Pro** unlocks the full toolkit:
 | Gateway controls & model switch | ❌ | ✅ |
 | Live log tail | ❌ | ✅ |
 
-**Pricing:** $7/mo or $49/yr (save 42%)
+**Pricing:** $3/mo or $19/yr (save 47%)
 
 To get a license key, reach out: **azamat.z.majidov@gmail.com**
 
