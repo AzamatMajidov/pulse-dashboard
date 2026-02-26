@@ -3,3 +3,9 @@ node_modules/
 *.log
 config.json
 data/
+
+# Internal dev docs
+PRD.md
+REQUIREMENTS.md
+TASKS.md
+CLAUDE.md
