@@ -1227,6 +1227,35 @@ app.get('/api/license/status', async (req, res) => {
   }
 });
 
+// --- Update ---
+app.get('/api/update/check', async (req, res) => {
+  try {
+    // Get current local commit
+    const localHash = (await run('git -C ' + __dirname + ' rev-parse --short HEAD', 5000)).trim();
+    // Fetch latest from remote
+    await run('git -C ' + __dirname + ' fetch origin main --quiet', 15000);
+    const remoteHash = (await run('git -C ' + __dirname + ' rev-parse --short origin/main', 5000)).trim();
+    const behind = parseInt((await run('git -C ' + __dirname + ' rev-list --count HEAD..origin/main', 5000)).trim()) || 0;
+    res.json({ current: localHash, latest: remoteHash, behind, updateAvailable: behind > 0 });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/update/apply', async (req, res) => {
+  try {
+    // Stash any local changes
+    await run('git -C ' + __dirname + ' stash --quiet', 5000).catch(() => {});
+    // Pull latest
+    const pullOutput = await run('git -C ' + __dirname + ' pull origin main', 30000);
+    res.json({ ok: true, output: pullOutput.trim() });
+    // Restart after short delay so response gets sent
+    setTimeout(() => process.exit(0), 1000);
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 // --- Setup + Settings page ---
 app.get('/setup', (req, res) => res.sendFile(path.join(__dirname, 'public', 'setup.html')));
 app.get('/settings', (req, res) => res.sendFile(path.join(__dirname, 'public', 'setup.html')));

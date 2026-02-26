@@ -730,6 +730,21 @@
     </div>
   </div>
 
+  <!-- Updates -->
+  <div class="card">
+    <div class="card-title">Updates</div>
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <div style="flex:1;min-width:200px">
+        <div style="font-size:13px;color:var(--text-dim)" id="update-status">Click "Check for Updates" to see if a new version is available.</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px" id="update-version"></div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn-test" onclick="checkUpdate()" id="update-check-btn">Check for Updates</button>
+        <button class="btn-test" onclick="applyUpdate()" id="update-apply-btn" style="display:none;background:var(--cyan);color:#000;border-color:var(--cyan);font-weight:600">Update Now</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Bots (collapsible) -->
   <div class="card">
     <div class="collapsible-header" onclick="toggleBots()">
@@ -1298,6 +1313,57 @@
       errEl.textContent = 'Network error: ' + err.message;
       btn.disabled = false;
       btn.textContent = 'Save & Restart';
+    }
+  }
+
+  // --- Updates ---
+  async function checkUpdate() {
+    var btn = document.getElementById('update-check-btn');
+    var status = document.getElementById('update-status');
+    var version = document.getElementById('update-version');
+    var applyBtn = document.getElementById('update-apply-btn');
+    btn.disabled = true;
+    btn.textContent = 'Checking…';
+    try {
+      var res = await fetch('/api/update/check');
+      var data = await res.json();
+      if (data.error) throw new Error(data.error);
+      version.textContent = 'Current: ' + data.current + ' · Latest: ' + data.latest;
+      if (data.updateAvailable) {
+        status.innerHTML = '🟡 <strong>' + data.behind + ' update' + (data.behind > 1 ? 's' : '') + ' available</strong>';
+        status.style.color = 'var(--yellow)';
+        applyBtn.style.display = 'inline-flex';
+      } else {
+        status.innerHTML = '✅ You\'re up to date';
+        status.style.color = 'var(--green)';
+        applyBtn.style.display = 'none';
+      }
+    } catch (err) {
+      status.textContent = '❌ Failed: ' + err.message;
+      status.style.color = 'var(--red)';
+    }
+    btn.disabled = false;
+    btn.textContent = 'Check for Updates';
+  }
+
+  async function applyUpdate() {
+    var btn = document.getElementById('update-apply-btn');
+    var status = document.getElementById('update-status');
+    if (!confirm('This will update Pulse and restart. Continue?')) return;
+    btn.disabled = true;
+    btn.textContent = 'Updating…';
+    try {
+      var res = await fetch('/api/update/apply', { method: 'POST' });
+      var data = await res.json();
+      if (!data.ok) throw new Error(data.error);
+      status.innerHTML = '✅ Updated! Restarting…';
+      status.style.color = 'var(--green)';
+      setTimeout(function() { location.reload(); }, 3000);
+    } catch (err) {
+      status.textContent = '❌ Update failed: ' + err.message;
+      status.style.color = 'var(--red)';
+      btn.disabled = false;
+      btn.textContent = 'Update Now';
     }
   }
 </script>
