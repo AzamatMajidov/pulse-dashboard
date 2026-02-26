@@ -1416,12 +1416,14 @@
           modelSelect.append(opt);
           modelSelect.disabled = true;
         } else {
+          var botModelId = bot.model ? 'anthropic/' + bot.model : '';
           _openclawModels.models.forEach(function(m) {
             const opt = document.createElement('option');
             opt.value = m.id;
             var label = m.alias || m.id.replace('anthropic/', '');
-            opt.textContent = (m.active ? '\u2713 ' : '') + label;
-            if (m.active) opt.selected = true;
+            var isBotModel = (m.id === botModelId);
+            opt.textContent = (isBotModel ? '\u2713 ' : '') + label;
+            if (isBotModel) opt.selected = true;
             modelSelect.append(opt);
           });
         }
