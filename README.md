@@ -4,47 +4,73 @@ A lightweight, self-hosted server monitoring dashboard for [OpenClaw](https://op
 
 Dark UI. Zero cloud dependencies. Runs on anything — home server, VPS, Raspberry Pi.
 
-![Pulse Dashboard](https://img.shields.io/badge/stack-Node.js%20%2B%20Express-brightgreen) ![License](https://img.shields.io/badge/license-MIT-blue)
+![Stack](https://img.shields.io/badge/stack-Node.js%20%2B%20Express-brightgreen) ![License](https://img.shields.io/badge/license-MIT-blue)
 
 ## Features
 
-- **System metrics** — CPU usage + temperature, RAM, disk, network speed
-- **Docker containers** — auto-discover all running containers or watch specific ones
-- **Systemd services** — monitor any user or system services
-- **OpenClaw bots** — see your bot(s) online/offline status, model, uptime
-- **Weather** — current conditions for your city
-- **Auto-refresh** every 10 seconds
-- **Basic auth** — protect your dashboard with a username/password
-- **Zero build step** — plain Node.js + Express, no bundler needed
+- **System metrics** — CPU (+ temp), RAM, disk, network speed with historical sparklines (24h/7d/30d)
+- **Docker containers** — auto-discover or watch specific ones; restart buttons
+- **Systemd services** — monitor any user or system service; restart buttons
+- **OpenClaw bots** — online/offline status, model, uptime, analytics; gateway controls; per-bot model switcher
+- **Telegram alerts** — rule-based alerts (CPU/RAM/disk thresholds, service/container/bot down); auto-detects OpenClaw credentials
+- **Live log tail** — stream `journalctl` or Docker logs in-browser with auto-scroll
+- **Historical charts** — background metrics collector; sparklines on every card; full-screen 24h/7d/30d charts
+- **Self-update** — Settings → Updates → Update Now (git pull + restart, no terminal needed)
+- **Weather widget** — current conditions for your city
+- **Basic auth** — protect your dashboard with username/password
+- **Zero build step** — plain Node.js + Express, no bundler, no framework
 
 ## Install
 
-### Prerequisites
-
-- Node.js >= 18
-- Linux with systemd (Ubuntu, Debian, Fedora, etc.)
-- OpenClaw installed (optional — bots section will be empty otherwise)
-
-### Quick Install
+### Quick install (one line)
 
 ```bash
-git clone https://github.com/AzamatMajidov/pulse-dashboard.git
-cd pulse-dashboard
-bash setup.sh
+git clone https://github.com/AzamatMajidov/pulse-dashboard.git ~/pulse-dashboard && cd ~/pulse-dashboard && bash setup.sh
 ```
 
 `setup.sh` will:
-1. Check Node.js version
+1. Check Node.js ≥18
 2. Run `npm install`
 3. Create `config.json` from the template
 4. Install and start a systemd user service
 
-### Configure
+### Prerequisites
 
-Edit `config.json` with your settings:
+- Linux with systemd (Ubuntu, Debian, Fedora, Raspberry Pi OS, etc.)
+- Node.js ≥18 — [install guide](https://nodejs.org)
+- OpenClaw installed (optional — bots section empty without it)
+
+### Open firewall (VPS)
+
+```bash
+sudo ufw allow 6682
+```
+
+Cloud providers (AWS, GCP, Hetzner, DigitalOcean): also open port 6682 in your security group / firewall rules.
+
+## First-time setup
+
+Open `http://YOUR-SERVER-IP:6682` in your browser — you'll land on the setup page.
+
+Fill in:
+- **Server Label** — a name for this machine
+- **Port** — default 6682
+- **Weather City** — your city name
+- **Network Interface** — click 🔍 Auto-detect
+- **Docker Containers** — Auto-discover or manual list
+- **Systemd Services** — click 🔍 Discover, select what to monitor
+- **Security** — enable Basic Auth, set username + password
+- **OpenClaw Bots** — add your bot name (leave Profile empty for default)
+
+Hit **Save & Restart** → you'll be redirected to the dashboard automatically.
+
+## Configuration
+
+Config lives in `config.json`. The web UI writes it for you — manual editing only needed for advanced options like custom alert rules.
 
 ```json
 {
+  "label": "My Server",
   "port": 6682,
   "networkIface": "auto",
   "weatherLocation": "London",
@@ -57,45 +83,58 @@ Edit `config.json` with your settings:
   },
   "bots": [
     { "name": "My Bot", "profile": null }
-  ]
+  ],
+  "alerts": {
+    "cooldownMinutes": 15,
+    "rules": [
+      { "metric": "cpu", "op": "gt", "threshold": 85, "durationSeconds": 60 },
+      { "metric": "ram", "op": "gt", "threshold": 90 },
+      { "metric": "service_down", "target": "my-app" },
+      { "metric": "bot_offline", "target": "My Bot" }
+    ]
+  }
 }
 ```
 
-| Key | Description |
-|---|---|
-| `port` | Port to listen on (default: 6682) |
-| `networkIface` | Network interface name, or `"auto"` to detect automatically |
-| `weatherLocation` | City name for weather widget |
-| `dockerContainers` | `"auto"` to show all running containers, or `["name1", "name2"]` for specific ones |
-| `systemdServices` | List of systemd user services to monitor |
-| `auth.enabled` | Set `true` to enable HTTP Basic Auth (recommended for VPS) |
-| `bots` | List of OpenClaw bot profiles. `profile: null` = default profile |
+### Config reference
 
-After editing config:
+| Key | Default | Description |
+|-----|---------|-------------|
+| `label` | hostname | Display name in dashboard header |
+| `port` | `6682` | HTTP port |
+| `networkIface` | `"auto"` | NIC name or `"auto"` to detect |
+| `weatherLocation` | — | City name for weather widget |
+| `dockerContainers` | `"auto"` | `"auto"` = all running; or `["name1","name2"]` |
+| `systemdServices` | `[]` | Systemd services to monitor |
+| `auth.enabled` | `false` | Enable HTTP Basic Auth |
+| `bots` | `[]` | OpenClaw bot profiles (`profile: null` = default) |
+| `alerts.cooldownMinutes` | `15` | Minimum gap between repeated alerts |
+| `alerts.rules` | `[]` | Alert rules (see below) |
+
+### Alert rules
+
+Pulse auto-detects Telegram credentials from your OpenClaw config. Rules are evaluated every 10 seconds.
+
+| metric | description |
+|--------|-------------|
+| `cpu` | CPU usage % — use with `op: "gt"`, `threshold`, optional `durationSeconds` |
+| `ram` | RAM usage % — same as cpu |
+| `disk` | Disk usage % — same as cpu |
+| `service_down` | Systemd service offline — use `target: "service-name"` |
+| `container_down` | Docker container stopped — use `target: "container-name"` |
+| `bot_offline` | OpenClaw bot offline — use `target: "Bot Name"` |
+
+## Management
 
 ```bash
-systemctl --user restart pulse
+systemctl --user status pulse      # check status
+systemctl --user restart pulse     # restart
+systemctl --user stop pulse        # stop
+journalctl --user -u pulse -f      # live logs
+loginctl enable-linger $USER       # keep service running without login (VPS)
 ```
-
-### Open firewall (VPS)
-
-If running on a VPS with UFW:
-
-```bash
-sudo ufw allow 6682
-```
-
-## Access
-
-```
-http://YOUR-SERVER-IP:6682
-```
-
-Or locally: `http://localhost:6682`
 
 ## Multiple bots
-
-If you run multiple OpenClaw profiles:
 
 ```json
 "bots": [
@@ -104,29 +143,13 @@ If you run multiple OpenClaw profiles:
 ]
 ```
 
-Set `profile` to the OpenClaw profile name (`openclaw --profile <name>`). Use `null` for the default profile.
-
-## Management
-
-```bash
-# Status
-systemctl --user status pulse
-
-# Restart
-systemctl --user restart pulse
-
-# Logs
-journalctl --user -u pulse -f
-
-# Stop
-systemctl --user stop pulse
-```
+`profile` matches the OpenClaw profile name (`openclaw --profile <name>`). Use `null` for default.
 
 ## Stack
 
-- **Backend:** Node.js + Express (no extra dependencies)
-- **Frontend:** Vanilla HTML/CSS/JS (no framework, no build step)
-- **Metrics source:** `/proc/stat`, `/proc/meminfo`, `/proc/net/dev`, `df`, `sensors`, `docker`, `systemctl`
+- **Backend:** Node.js + Express
+- **Frontend:** Vanilla HTML/CSS/JS — no framework, no build step
+- **Metrics:** `/proc/stat`, `/proc/meminfo`, `/proc/net/dev`, `df`, `sensors`, `docker`, `systemctl`
 
 ## License
 
