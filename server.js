@@ -458,13 +458,72 @@ function persistBotCache() {
 async function fetchBotStatus(name, profile) {
   const key = profile || 'main';
   try {
-    const cmd = profile ? `openclaw --profile ${profile} status` : 'openclaw status';
+    const cmd = profile
+      ? `openclaw --profile ${profile} status --json`
+      : 'openclaw status --json';
     const out = await run(cmd, 15000);
-    const online = out.includes('reachable') && !out.includes('unreachable') && !out.includes('error');
-    const lastMatch = out.match(/active\s+(just now|\d+[smhd]\s+ago|\d+\s+\w+\s+ago)/i);
-    const lastActive = lastMatch ? lastMatch[1].trim() : 'unknown';
-    const modelMatch = out.match(/claude-[a-z0-9.-]+/);
-    const model = modelMatch ? modelMatch[0] : 'unknown';
+
+    // Parse JSON output from openclaw status --json
+    let json;
+    try { json = JSON.parse(out); } catch { json = null; }
+
+    let online = false, lastActive = 'unknown', model = 'unknown';
+    let sessions = 0, totalTokens = 0, contextTokens = 200000, contextPercent = 0;
+    let heartbeatEnabled = false, heartbeatInterval = null, heartbeatEveryMs = null;
+    let lastActiveAgeMs = null, sessionStarted = null, activeSessions24h = 0;
+
+    if (json) {
+      // Gateway is reachable if we got valid JSON with sessions
+      online = !!(json.sessions && json.sessions.count >= 0);
+
+      // Sessions data
+      const recent = json.sessions?.recent || [];
+      sessions = json.sessions?.count || 0;
+      contextTokens = json.sessions?.defaults?.contextTokens || 200000;
+
+      // Main session (first/most recent)
+      if (recent.length > 0) {
+        const main = recent[0];
+        totalTokens = main.totalTokens || 0;
+        contextPercent = main.percentUsed || 0;
+        model = main.model || json.sessions?.defaults?.model || 'unknown';
+        if (main.updatedAt) {
+          sessionStarted = new Date(main.updatedAt).toISOString();
+        }
+        // Format lastActive from age (ms)
+        if (main.age != null) {
+          lastActive = main.age < 60000 ? 'just now' : formatDuration(Math.floor(main.age / 1000)) + ' ago';
+        }
+      }
+
+      // Count sessions active within last 24h
+      const dayAgo = 24 * 60 * 60 * 1000;
+      activeSessions24h = recent.filter(s => s.age != null && s.age < dayAgo).length;
+
+      // Heartbeat data
+      const hbAgents = json.heartbeat?.agents || [];
+      if (hbAgents.length > 0) {
+        const hb = hbAgents[0];
+        heartbeatEnabled = !!hb.enabled;
+        heartbeatInterval = hb.every || null;
+        heartbeatEveryMs = hb.everyMs || null;
+      }
+
+      // Agent data (lastActiveAgeMs)
+      const agents = json.agents?.agents || [];
+      if (agents.length > 0) {
+        lastActiveAgeMs = agents[0].lastActiveAgeMs ?? null;
+      }
+    } else {
+      // Fallback: parse text output (backward compat)
+      online = out.includes('reachable') && !out.includes('unreachable') && !out.includes('error');
+      const lastMatch = out.match(/active\s+(just now|\d+[smhd]\s+ago|\d+\s+\w+\s+ago)/i);
+      lastActive = lastMatch ? lastMatch[1].trim() : 'unknown';
+      const modelMatch = out.match(/claude-[a-z0-9.-]+/);
+      model = modelMatch ? modelMatch[0] : 'unknown';
+    }
+
+    // Uptime from systemd
     const svcName = profile ? `openclaw-${profile}` : 'openclaw-gateway';
     const tsRaw = await run(`systemctl --user show ${svcName} --property=ActiveEnterTimestamp`);
     const ts = tsRaw.replace('ActiveEnterTimestamp=', '').trim();
@@ -473,7 +532,13 @@ async function fetchBotStatus(name, profile) {
       const since = new Date(ts);
       if (!isNaN(since)) uptime = formatDuration(Math.floor((Date.now() - since) / 1000));
     }
-    const result = { online, lastActive, model, uptime };
+
+    const result = {
+      online, lastActive, model, uptime,
+      sessions, totalTokens, contextTokens, contextPercent,
+      heartbeatEnabled, heartbeatInterval, heartbeatEveryMs,
+      lastActiveAgeMs, sessionStarted, activeSessions24h
+    };
     botCache[key] = { time: Date.now(), data: result, refreshing: false };
     persistBotCache();
     return { name, ...result };
@@ -497,7 +562,7 @@ function getBotStatus(name, profile) {
   // Stale or no cache — return immediately (stale data or empty), refresh in background
   if (!cached || !cached.refreshing) {
     if (cached) cached.refreshing = true;
-    else botCache[key] = { time: 0, data: { online: false, lastActive: '...', model: '...', uptime: '...' }, refreshing: true };
+    else botCache[key] = { time: 0, data: { online: false, lastActive: '...', model: '...', uptime: '...', sessions: 0, totalTokens: 0, contextTokens: 200000, contextPercent: 0, heartbeatEnabled: false, heartbeatInterval: null, heartbeatEveryMs: null, lastActiveAgeMs: null, sessionStarted: null, activeSessions24h: 0 }, refreshing: true };
     fetchBotStatus(name, profile).catch(() => {});
   }
 
@@ -868,6 +933,31 @@ app.get('/api/metrics', async (req, res) => {
     console.error('API /metrics error:', err.message);
     res.status(500).json({ error: err.message });
   }
+});
+
+// --- T79: Bot analytics stats ---
+app.get('/api/bots/stats', (req, res) => {
+  const stats = {};
+  for (const bot of (CONFIG.bots || [])) {
+    const key = bot.profile || 'main';
+    const cached = botCache[key];
+    if (cached && cached.data) {
+      const d = cached.data;
+      stats[key] = {
+        sessions: d.sessions || 0,
+        totalTokens: d.totalTokens || 0,
+        contextTokens: d.contextTokens || 200000,
+        contextPercent: d.contextPercent || 0,
+        heartbeatEnabled: d.heartbeatEnabled || false,
+        heartbeatInterval: d.heartbeatInterval || null,
+        heartbeatEveryMs: d.heartbeatEveryMs || null,
+        lastActiveAgeMs: d.lastActiveAgeMs ?? null,
+        sessionStarted: d.sessionStarted || null,
+        activeSessions24h: d.activeSessions24h || 0
+      };
+    }
+  }
+  res.json(stats);
 });
 
 // --- T08: Alert status ---

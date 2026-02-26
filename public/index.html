@@ -608,6 +608,43 @@
       font-family: 'JetBrains Mono', monospace;
     }
 
+    /* === T82: HEARTBEAT PULSE === */
+    .bot-heartbeat {
+      display: inline-flex;
+      align-items: center;
+      font-size: 14px;
+      animation: heartPulse 1.5s ease-in-out infinite;
+      margin-left: 4px;
+    }
+
+    @keyframes heartPulse {
+      0%, 100% { transform: scale(1); opacity: 0.8; }
+      50% { transform: scale(1.25); opacity: 1; }
+    }
+
+    /* === T83: CONTEXT PROGRESS BAR === */
+    .bot-context-bar {
+      height: 4px;
+      background: var(--bg3);
+      border-radius: 2px;
+      overflow: hidden;
+      margin-top: 4px;
+    }
+
+    .bot-context-fill {
+      height: 100%;
+      background: var(--cyan);
+      border-radius: 2px;
+      transition: width 0.5s ease;
+    }
+
+    .bot-context-label {
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-top: 4px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
     /* === BOT ACTION BAR === */
     .bot-action-bar {
       display: flex;
@@ -1270,6 +1307,13 @@
       el.classList.add('updated');
     }
 
+    // T81 — Format token counts (e.g. 165224 → "165k", 1500000 → "1.5M")
+    function formatTokens(n) {
+      if (n >= 1000000) return (n / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+      if (n >= 1000) return Math.round(n / 1000) + 'k';
+      return String(n);
+    }
+
     // Track active restart actions to prevent re-render during confirmation/restart
     const _activeActions = new Set();
 
@@ -1469,6 +1513,14 @@
         const title = document.createElement('div');
         title.className = 'bot-title';
         title.textContent = bot.name;
+        // T82 — Heartbeat pulsing indicator
+        if (bot.heartbeatEnabled) {
+          const hbSpan = document.createElement('span');
+          hbSpan.className = 'bot-heartbeat';
+          hbSpan.textContent = '\u2764\uFE0F';
+          hbSpan.title = 'Heartbeat: ' + (bot.heartbeatInterval || 'enabled');
+          title.append(hbSpan);
+        }
         nameInfo.append(title);
         nameWrap.append(emoji, nameInfo);
 
@@ -1496,6 +1548,43 @@
           stat.append(lbl, val);
           stats.append(stat);
         });
+
+        // T81 — Second stats row: Sessions | Tokens | Heartbeat
+        const stats2 = document.createElement('div');
+        stats2.className = 'bot-stats';
+        var tokenStr = formatTokens(bot.totalTokens || 0) + '/' + formatTokens(bot.contextTokens || 200000);
+        var ctxPct = bot.contextPercent || 0;
+        [
+          ['Sessions', (bot.sessions || 0).toString()],
+          ['Tokens', tokenStr + ' (' + ctxPct + '%)'],
+          ['Heartbeat', bot.heartbeatEnabled ? (bot.heartbeatInterval || 'on') : 'off']
+        ].forEach(function([label, value]) {
+          const stat = document.createElement('div');
+          stat.className = 'bot-stat';
+          const lbl = document.createElement('div');
+          lbl.className = 'bot-stat-label';
+          lbl.textContent = label;
+          const val = document.createElement('div');
+          val.className = 'bot-stat-value';
+          val.textContent = value;
+          stat.append(lbl, val);
+          stats2.append(stat);
+        });
+
+        // T83 — Context progress bar
+        const ctxWrap = document.createElement('div');
+        const ctxBar = document.createElement('div');
+        ctxBar.className = 'bot-context-bar';
+        const ctxFill = document.createElement('div');
+        ctxFill.className = 'bot-context-fill';
+        ctxFill.style.width = ctxPct + '%';
+        if (ctxPct >= 90) ctxFill.style.background = 'var(--red)';
+        else if (ctxPct >= 70) ctxFill.style.background = 'var(--yellow)';
+        ctxBar.append(ctxFill);
+        const ctxLabel = document.createElement('div');
+        ctxLabel.className = 'bot-context-label';
+        ctxLabel.textContent = 'Context: ' + ctxPct + '% used';
+        ctxWrap.append(ctxBar, ctxLabel);
 
         // T33 — Action bar
         const actionBar = document.createElement('div');
@@ -1649,7 +1738,7 @@
         }
 
         actionBar.append(modelSelect, restartBtn, stopBtn, confirmHolder);
-        card.append(header, stats, actionBar);
+        card.append(header, stats, stats2, ctxWrap, actionBar);
         return card;
       }));
     }

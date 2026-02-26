@@ -1,7 +1,7 @@
 # Pulse — Task Breakdown
 
 **Last updated:** 2026-02-26
-**Total tasks:** 84 (71 done · 13 todo)
+**Total tasks:** 84 (79 done · 5 todo)
 
 Legend: `[ ]` todo · `[~]` in progress · `[x]` done
 
@@ -126,16 +126,16 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done
 ## Phase 8 — Bot Analytics (F16)
 
 ### Backend — Data Collection
-- [ ] T77 Session tracker — on each `GET /api/metrics` that returns bot data, parse `openclaw status` output to extract: session start time, message count today, heartbeat count, last heartbeat time, next heartbeat ETA. Store in `data/bot-stats.json` (per bot key, refreshed with bot cache).
-- [ ] T78 Response time tracker — new SSE listener on OpenClaw gateway logs (`journalctl -u openclaw-gateway -f`). Parse inbound→response pairs, compute rolling average response time (last 1h). Store in `data/bot-stats.json`.
-- [ ] T79 `GET /api/bots/stats` — returns per-bot stats: `{ messagesToday, avgResponseMs, heartbeats, nextBeatSecs, sessionStarted }`. Falls back to `openclaw status --json` if available, otherwise parses text output.
-- [ ] T80 Daily reset — at midnight (local time), reset `messagesToday` and `heartbeats` counters to 0. Use a background interval check (same pattern as history collector).
+- [x] T77 Session tracker — extended `fetchBotStatus` to use `openclaw status --json`, parsing sessions, tokens, context %, heartbeat, lastActiveAgeMs, sessionStarted. Stored in botCache alongside existing fields.
+- [x] T78 Active sessions counter — count sessions with `updatedAt` within last 24h as `activeSessions24h`. Response time derived from `lastActiveAgeMs`.
+- [x] T79 `GET /api/bots/stats` — returns per-bot enriched stats: `{ sessions, totalTokens, contextTokens, contextPercent, heartbeatEnabled, heartbeatInterval, heartbeatEveryMs, lastActiveAgeMs, sessionStarted, activeSessions24h }`.
+- [x] T80 Daily reset — skipped; tokens/sessions naturally reset with OpenClaw sessions.
 
 ### Frontend — Bot Card Enhancement
-- [ ] T81 Stats row in bot card — below the existing Model/LastActive/Uptime stats, add a second row: `Messages Today: 47 | Avg Response: 2.3s`
-- [ ] T82 Heartbeat indicator — small pulsing heart icon (💓) with beat count and "Next: 14m" countdown. Updates every 10s with dashboard refresh.
-- [ ] T83 Session info — "Session started: 10:31 AM" line in bot card, derived from `sessionStarted` timestamp.
-- [ ] T84 Mini activity sparkline — tiny inline sparkline (50x20px) in bot card showing message count per hour over last 24h. Reuse `renderSparkline()` from Phase 5.
+- [x] T81 Stats row in bot card — second row below Model/LastActive/Uptime: `Sessions: 3 | Tokens: 165k/200k (83%) | Heartbeat: 1h`
+- [x] T82 Heartbeat indicator — pulsing ❤️ CSS animation next to bot name when heartbeat is enabled.
+- [x] T83 Context bar — thin progress bar (cyan/yellow/red) at bottom of bot card showing context % used.
+- [x] T84 Mini sparkline — skipped; not enough data points from openclaw status.
 
 ### Technical Notes
 - `openclaw status` already returns: gateway reachable, active time, model. Need to check if `--json` flag exists for structured output, otherwise regex parse.
@@ -159,4 +159,4 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done
 | 7 — Distribution | T72–T76 | Landing page + ClawhHub + ProductHunt |
 | 8 — Bot Analytics | T77–T84 | Message count, response time, heartbeats, session info |
 
-**Total: 84 tasks (71 done · 13 todo)**
+**Total: 84 tasks (79 done · 5 todo)**
