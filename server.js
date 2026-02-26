@@ -510,12 +510,22 @@ async function fetchWeather() {
     return weatherCache || { temp: null, description: 'N/A', icon: '🌡️' };
   }
   try {
-    const data = await httpGet(`https://wttr.in/${encodeURIComponent(CONFIG.weatherLocation)}?format=j1`);
+    // Resolve lat/lon from location name via Open-Meteo geocoding
+    let lat = CONFIG.weatherLat, lon = CONFIG.weatherLon;
+    if (!lat || !lon) {
+      // Fallback geocode if lat/lon not cached in config (e.g. old config)
+      const loc = CONFIG.weatherLocation || 'Tashkent';
+      const geoData = await httpGet(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(loc)}&count=1`);
+      const geoJson = JSON.parse(geoData);
+      if (!geoJson.results || !geoJson.results.length) throw new Error('Location not found: ' + loc);
+      lat = geoJson.results[0].latitude; lon = geoJson.results[0].longitude;
+    }
+    const data = await httpGet(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code&timezone=auto`);
     const json = JSON.parse(data);
-    const current = json.current_condition[0];
-    const temp = parseInt(current.temp_C);
-    const desc = current.weatherDesc[0].value;
-    const icon = weatherIcon(parseInt(current.weatherCode));
+    const temp = Math.round(json.current.temperature_2m);
+    const wmoCode = json.current.weather_code;
+    const desc = wmoDescription(wmoCode);
+    const icon = wmoIcon(wmoCode);
     weatherCache = { temp, description: desc, icon };
   } catch (err) {
     console.error('fetchWeather failed:', err.message);
@@ -525,16 +535,30 @@ async function fetchWeather() {
   return weatherCache || { temp: null, description: 'N/A', icon: '🌡️' };
 }
 
-function weatherIcon(code) {
-  if (code === 113) return '☀️';
-  if (code === 116) return '⛅';
-  if ([119, 122].includes(code)) return '☁️';
-  if ([143, 248, 260].includes(code)) return '🌫️';
-  if ([176, 263, 266, 281, 284, 293, 296, 299, 302, 305, 308, 311, 314, 317,
-       350, 353, 356, 359, 362, 365, 374, 377].includes(code)) return '🌧️';
-  if ([179, 182, 185, 227, 230, 323, 326, 329, 332, 335, 338, 368, 371, 395].includes(code)) return '❄️';
-  if ([200, 386, 389, 392].includes(code)) return '⛈️';
+function wmoIcon(code) {
+  if (code === 0) return '☀️';
+  if (code === 1) return '🌤️';
+  if ([2, 3].includes(code)) return '⛅';
+  if ([45, 48].includes(code)) return '🌫️';
+  if ([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82].includes(code)) return '🌧️';
+  if ([71, 73, 75, 77, 85, 86].includes(code)) return '❄️';
+  if ([95, 96, 99].includes(code)) return '⛈️';
   return '🌡️';
+}
+
+function wmoDescription(code) {
+  const map = {
+    0: 'Clear sky', 1: 'Mainly clear', 2: 'Partly cloudy', 3: 'Overcast',
+    45: 'Fog', 48: 'Rime fog', 51: 'Light drizzle', 53: 'Drizzle', 55: 'Dense drizzle',
+    56: 'Freezing drizzle', 57: 'Dense freezing drizzle',
+    61: 'Light rain', 63: 'Rain', 65: 'Heavy rain',
+    66: 'Freezing rain', 67: 'Heavy freezing rain',
+    71: 'Light snow', 73: 'Snow', 75: 'Heavy snow', 77: 'Snow grains',
+    80: 'Light showers', 81: 'Showers', 82: 'Heavy showers',
+    85: 'Light snow showers', 86: 'Heavy snow showers',
+    95: 'Thunderstorm', 96: 'Thunderstorm with hail', 99: 'Thunderstorm with heavy hail'
+  };
+  return map[code] || 'Unknown';
 }
 
 // --- Utils ---
@@ -569,6 +593,20 @@ app.post('/api/setup', async (req, res) => {
     // Basic validation
     if (!cfg.port || isNaN(parseInt(cfg.port))) return res.status(400).json({ error: 'Invalid port' });
     if (!cfg.weatherLocation) return res.status(400).json({ error: 'Weather location required' });
+
+    // Validate & geocode weather location
+    try {
+      const geoData = await httpGet(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(cfg.weatherLocation)}&count=1`);
+      const geoJson = JSON.parse(geoData);
+      if (!geoJson.results || !geoJson.results.length) {
+        return res.status(400).json({ error: `City not found: "${cfg.weatherLocation}". Check spelling.` });
+      }
+      cfg.weatherLat = geoJson.results[0].latitude;
+      cfg.weatherLon = geoJson.results[0].longitude;
+      cfg.weatherLocation = geoJson.results[0].name; // normalize to canonical name
+    } catch (geoErr) {
+      return res.status(500).json({ error: 'Failed to validate city: ' + geoErr.message });
+    }
 
     // Normalize types
     cfg.port = parseInt(cfg.port);
