@@ -1,7 +1,7 @@
 # Pulse — Task Breakdown
 
 **Last updated:** 2026-02-26
-**Total tasks:** 84 (79 done · 5 todo)
+**Total tasks:** 116 (79 done · 37 todo)
 
 Legend: `[ ]` todo · `[~]` in progress · `[x]` done
 
@@ -146,6 +146,98 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done
 
 ---
 
+## Phase 9 — Cost Tracker
+
+### Backend
+- [ ] T85 Model pricing table — hardcoded map in server.js: `{ "claude-opus-4-6": { input: 15, output: 75, cacheRead: 1.5, cacheWrite: 18.75 }, "claude-sonnet-4-6": { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 } }` (per 1M tokens, USD). Config override in config.json for custom models.
+- [ ] T86 Cost calculation — extend `fetchBotStatus` to extract per-session `inputTokens`, `outputTokens`, `cacheRead`, `cacheWrite` from `openclaw status --json`. Multiply by pricing. Store daily totals in `data/cost-history.jsonl` (schema: `{ ts, date, model, inputTokens, outputTokens, cacheRead, cacheWrite, costUsd }`).
+- [ ] T87 Daily cost aggregation — background collector (alongside history collector every 5 min): read all sessions from `openclaw status --json`, sum tokens by model, compute cost, append to `data/cost-history.jsonl`. Deduplicate by date (one entry per day, updated on each collection).
+- [ ] T88 `GET /api/costs` — returns `{ today: { tokens, cost }, week: { tokens, cost }, month: { tokens, cost }, daily: [{ date, tokens, cost }], byModel: [{ model, tokens, cost, percent }], bySession: [{ key, type, tokens, cost }], budget: { monthly, warning } }`.
+- [ ] T89 Budget alerts — if monthly cost exceeds `config.json` budget threshold, include `budgetExceeded: true` in cost API response. Trigger Telegram alert using existing alert system.
+
+### Frontend
+- [ ] T90 Cost summary card — new card on dashboard below bot cards: "Costs Today: $0.42 | This Week: $2.80 | This Month: $8.50". Cyan text for under budget, red for over.
+- [ ] T91 Cost breakdown modal — click cost card → modal with: daily bar chart (last 30 days, Chart.js), model breakdown pie/donut, session type breakdown (main vs sub-agent vs cron).
+- [ ] T92 Budget setting — in Settings page: monthly budget input ($), warning threshold (%). Saved to config.json.
+
+---
+
+## Phase 10 — Cron Monitor
+
+### Backend
+- [ ] T93 `GET /api/cron` — runs `openclaw cron list --json`, parses jobs: id, name, schedule, enabled, lastRun, nextRun, duration, status, description. Cache with 30s TTL.
+- [ ] T94 `POST /api/cron/:id/toggle` — enable/disable cron job. Uses OpenClaw gateway WebSocket invoke: `{ action: "update", jobId, patch: { enabled } }`. Gateway connection: ws://127.0.0.1:18789 with auth token from `~/.openclaw/openclaw.json`.
+- [ ] T95 `POST /api/cron/:id/run` — trigger immediate run. Gateway invoke: `{ action: "run", jobId }`.
+- [ ] T96 `POST /api/cron/create` — create new cron job. Gateway invoke: `{ action: "add", job: { name, schedule, payload } }`. Validate schedule format.
+- [ ] T97 `DELETE /api/cron/:id` — delete cron job. Gateway invoke: `{ action: "remove", jobId }`.
+- [ ] T98 Gateway WebSocket helper — reusable `gatewayInvoke(action, params)` function. Connect to `ws://127.0.0.1:{port}`, send JSON with auth token, await response, close. Read port + token from `~/.openclaw/openclaw.json`.
+
+### Frontend
+- [ ] T99 Cron section on dashboard — collapsible section below services: table with columns: Name, Schedule, Status (active/idle/disabled), Last Run, Next Run, Actions.
+- [ ] T100 Toggle switch — per-job enable/disable toggle. Calls POST /api/cron/:id/toggle. Optimistic UI update.
+- [ ] T101 Run Now button — per-job "▶ Run" button. Calls POST /api/cron/:id/run. Shows spinner, then refreshes.
+- [ ] T102 Create cron modal — "+" button opens modal: name input, schedule dropdown (presets: every 15m, 30m, 1h, 6h, daily 9am, custom cron expression), task/message textarea. Calls POST /api/cron/create.
+- [ ] T103 Delete button — per-job "🗑" with confirm dialog. Calls DELETE /api/cron/:id.
+
+---
+
+## Phase 11 — Activity Feed
+
+### Backend
+- [ ] T104 Event logger — write events to `data/activity.jsonl` on: alert triggered, alert resolved, service restart, docker restart, model switch, gateway restart, license activated, cron job run. Schema: `{ ts, type, icon, title, detail, source }`.
+- [ ] T105 `GET /api/activity` — reads `data/activity.jsonl` + cron last runs from `/api/cron`. Merges, sorts by timestamp desc, returns last 50 events. Cache 30s.
+- [ ] T106 Hook existing actions — add `logActivity(type, title, detail)` calls to: restart-service, restart-docker, alerts/test, openclaw/model, openclaw/gateway, license/activate endpoints.
+
+### Frontend
+- [ ] T107 Activity feed card — new card on dashboard (right side or below metrics): scrollable timeline, max-height 400px. Each entry: icon + title + detail + relative timestamp ("2m ago").
+- [ ] T108 Activity icons — color-coded by type: 🔔 alert (red), 🔄 restart (yellow), 🤖 model switch (cyan), ⏰ cron (purple), 🔑 license (green).
+- [ ] T109 Auto-refresh — feed refreshes with dashboard (every 10s). New items fade in with CSS animation.
+
+---
+
+## Phase 12 — Conversations Browser
+
+### Backend
+- [ ] T110 `GET /api/sessions` — reads `~/.openclaw/agents/main/sessions/sessions.json` (and personal profile). For each session: key, sessionId, updatedAt, model, totalTokens, contextTokens, percentUsed, label, type (main/cron/slash/sub-agent). Categorize by key pattern: `agent:main:main` → main, `agent:main:cron:*` → cron, `telegram:slash:*` → slash command, `*:subagent:*` → sub-agent. Cache 60s.
+- [ ] T111 `GET /api/sessions/:sessionId/history` — finds JSONL transcript at `~/.openclaw/agents/main/sessions/{sessionId}.jsonl`. Parses lines with `type: "message"`, extracts role + content text. Filters out toolUse/toolResult. Returns `{ messages: [{ role, content, ts }] }`. Limit to last 100 messages. Content truncated to 3000 chars per message.
+- [ ] T112 Session search — `GET /api/sessions?q=keyword` — basic text search: filter sessions by label or key containing query string.
+
+### Frontend
+- [ ] T113 Sessions page — new page at `/conversations` (or section on dashboard). List view: session cards showing key (prettified), model badge, token count, last active time, type icon (💬 main, ⏰ cron, ⚡ slash, 🤖 sub-agent).
+- [ ] T114 Session detail modal — click session → modal with conversation history. Chat-bubble style: user messages right-aligned (cyan), assistant messages left-aligned (gray). Timestamps between messages. Scrollable.
+- [ ] T115 Filters — filter bar: All | Main | Cron | Sub-agents | Slash. Token count sort toggle.
+- [ ] T116 Search bar — text input at top, filters sessions by keyword match on key/label.
+
+---
+
+## Technical Notes for All Phases
+
+### Gateway WebSocket Invoke (needed for Phase 10)
+```
+Port: 18789 (from ~/.openclaw/openclaw.json → gateway.port)
+Token: ~/.openclaw/openclaw.json → gateway.auth.token
+Protocol: ws://127.0.0.1:{port}
+Auth: send token in connection header or first message
+Used by: cron toggle/run/create/delete
+```
+
+### Session Transcripts (needed for Phase 12)
+```
+Location: ~/.openclaw/agents/main/sessions/{sessionId}.jsonl
+Format: JSONL, each line is JSON object
+Message lines: { type: "message", message: { role: "user"|"assistant", content: "text" | [{type:"text",text:"..."}] }, timestamp: "ISO" }
+Other line types: session, model_change, thinking_level_change (skip these)
+Match sessionId from sessions.json to find transcript file
+```
+
+### Model Pricing (needed for Phase 9)
+```
+Claude Opus 4.6:   input $15/MTok, output $75/MTok, cache read $1.50/MTok, cache write $18.75/MTok
+Claude Sonnet 4.6: input $3/MTok,  output $15/MTok, cache read $0.30/MTok, cache write $3.75/MTok
+```
+
+---
+
 ## Summary by Phase
 
 | Phase | Tasks | Description |
@@ -158,5 +250,9 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done
 | 6 — License | T63–T71 | Paywall + license management |
 | 7 — Distribution | T72–T76 | Landing page + ClawhHub + ProductHunt |
 | 8 — Bot Analytics | T77–T84 | Message count, response time, heartbeats, session info |
+| 9 — Cost Tracker | T85–T92 | Token costs, daily chart, model breakdown, budget alerts |
+| 10 — Cron Monitor | T93–T103 | Visual cron management, toggle, run now, create/delete |
+| 11 — Activity Feed | T104–T109 | Real-time event timeline, auto-refresh |
+| 12 — Conversations | T110–T116 | Session browser, chat history viewer, filters |
 
-**Total: 84 tasks (79 done · 5 todo)**
+**Total: 116 tasks (79 done · 37 todo)**
