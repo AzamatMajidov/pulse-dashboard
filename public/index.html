@@ -892,22 +892,23 @@
       position: absolute;
       top: 0;
       right: 0;
-      width: 24px;
-      height: 24px;
+      width: 32px;
+      height: 32px;
       border-radius: 6px;
       border: 1px solid var(--border);
-      background: none;
-      color: var(--text-muted);
+      background: rgba(255,255,255,0.06);
+      color: var(--text);
       cursor: pointer;
-      font-size: 14px;
+      font-size: 18px;
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: border-color 0.2s, color 0.2s;
+      transition: border-color 0.2s, color 0.2s, background 0.2s;
     }
 
     .chart-close-btn:hover {
       border-color: var(--border-hover);
+      background: rgba(255,255,255,0.12);
       color: var(--cyan);
     }
 
@@ -2077,6 +2078,29 @@
       // Reload sparkline
       loadSparkline(key);
     }
+
+    // Collapse current expanded card (helper)
+    function collapseCurrentCard() {
+      if (!_expandedCard) return;
+      for (var k in _sparkConfigs) {
+        if (_sparkConfigs[k].cardId === _expandedCard) {
+          collapseCard(k);
+          return;
+        }
+      }
+    }
+
+    // ESC key to close expanded card
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') collapseCurrentCard();
+    });
+
+    // Click outside expanded card to close
+    document.addEventListener('click', function(e) {
+      if (!_expandedCard) return;
+      var card = document.getElementById(_expandedCard);
+      if (card && !card.contains(e.target)) collapseCurrentCard();
+    });
 
     // Load sparklines on page load
     loadSparklines();
