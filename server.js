@@ -458,9 +458,7 @@ function persistBotCache() {
 async function fetchBotStatus(name, profile) {
   const key = profile || 'main';
   try {
-    const cmd = profile
-      ? `openclaw --profile ${profile} status --json`
-      : 'openclaw status --json';
+    const cmd = openclawCmd(profile, 'status --json');
     const out = await run(cmd, 15000);
 
     // Parse JSON output from openclaw status --json
@@ -1329,7 +1327,7 @@ app.post('/api/openclaw/model', async (req, res) => {
 app.post('/api/openclaw/clear-sessions', async (req, res) => {
   try {
     const { profile } = req.body;
-    const cmd = profile ? `openclaw sessions clear --profile ${profile}` : 'openclaw sessions clear';
+    const cmd = openclawCmd(profile, 'sessions clear');
     await run(cmd, 15000);
     res.json({ ok: true });
   } catch (err) {
@@ -1614,6 +1612,14 @@ function getCronCache(profile) {
 }
 function profileFlag(p) { return p && p !== 'main' ? '--profile ' + p + ' ' : ''; }
 
+function openclawCmd(profile, cmd) {
+  const bot = (CONFIG.bots || []).find(b => (b.profile || null) === (profile || null));
+  if (bot && bot.stateDir) {
+    return `OPENCLAW_STATE_DIR=${bot.stateDir} openclaw ${cmd}`;
+  }
+  return profileFlag(profile) + `openclaw ${cmd}`;
+}
+
 // T101 — GET /api/cron/profiles
 app.get('/api/cron/profiles', requirePro, (req, res) => {
   const bots = CONFIG.bots || [];
@@ -1633,7 +1639,7 @@ app.get('/api/cron', requirePro, async (req, res) => {
     if (cache.data && now - cache.time < CRON_CACHE_TTL) {
       return res.json(cache.data);
     }
-    const out = await run(profileFlag(profile) + 'openclaw cron list --json', 10000);
+    const out = await run(openclawCmd(profile, 'cron list --json'), 10000);
     if (!out) {
       cache.data = []; cache.time = now;
       return res.json([]);
@@ -1664,7 +1670,7 @@ app.post('/api/cron/:id/toggle', requirePro, async (req, res) => {
     }
     const { enabled } = req.body;
     const action = enabled ? 'enable' : 'disable';
-    await run(profileFlag(profile) + `openclaw cron ${action} ${id}`, 10000);
+    await run(openclawCmd(profile, `cron ${action} ${id}`), 10000);
     getCronCache(profile).time = 0;
     res.json({ ok: true, id, enabled: !!enabled });
   } catch (err) {
@@ -1686,7 +1692,7 @@ app.post('/api/cron/:id/run', requirePro, async (req, res) => {
     if (!/^[a-zA-Z0-9_-]+$/.test(profile)) {
       return res.status(400).json({ ok: false, error: 'Invalid profile' });
     }
-    await run(profileFlag(profile) + `openclaw cron run ${id}`, 15000);
+    await run(openclawCmd(profile, `cron run ${id}`), 15000);
     getCronCache(profile).time = 0;
     res.json({ ok: true, id });
   } catch (err) {
@@ -1726,7 +1732,7 @@ app.post('/api/cron/create', requirePro, async (req, res) => {
     if (!safeName) {
       return res.status(400).json({ ok: false, error: 'Invalid name' });
     }
-    await run(profileFlag(profile) + `openclaw cron add --name "${safeName}" --schedule "${trimmed}" --payload "${payload.replace(/"/g, '\\"')}"`, 10000);
+    await run(openclawCmd(profile, `cron add --name "${safeName}" --schedule "${trimmed}" --payload "${payload.replace(/"/g, '\\"')}"`), 10000);
     getCronCache(profile).time = 0;
     res.json({ ok: true, name: safeName });
   } catch (err) {
@@ -1752,7 +1758,7 @@ app.delete('/api/cron/:id', requirePro, async (req, res) => {
     // Verify job exists by checking cached list or fetching fresh
     let jobs = cache.data;
     if (!jobs || Date.now() - cache.time >= CRON_CACHE_TTL) {
-      const out = await run(profileFlag(profile) + 'openclaw cron list --json', 10000);
+      const out = await run(openclawCmd(profile, 'cron list --json'), 10000);
       if (!out) return res.status(501).json({ error: 'not_supported' });
       try { jobs = JSON.parse(out); } catch { jobs = []; }
       if (!Array.isArray(jobs)) jobs = jobs.jobs || jobs.crons || [];
@@ -1761,7 +1767,7 @@ app.delete('/api/cron/:id', requirePro, async (req, res) => {
     if (!exists) {
       return res.status(404).json({ ok: false, error: 'Cron job not found' });
     }
-    await run(profileFlag(profile) + `openclaw cron remove ${id}`, 10000);
+    await run(openclawCmd(profile, `cron remove ${id}`), 10000);
     cache.time = 0;
     res.json({ ok: true, id });
   } catch (err) {

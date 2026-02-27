@@ -300,6 +300,9 @@
     }
     .bot-row input { flex: 1; }
     .bot-row .profile-input { max-width: 140px; }
+    .bot-statedir-row { display: none; margin-bottom: 8px; padding-left: 8px; }
+    .bot-statedir-row.visible { display: flex; gap: 8px; align-items: center; }
+    .bot-statedir-row input { flex: 1; font-size: 12px; }
     .btn-remove-bot {
       background: none;
       border: 1px solid var(--border);
@@ -845,7 +848,7 @@
       const body = document.getElementById('bots-body');
       body.classList.add('open');
       document.getElementById('bots-arrow').textContent = '▼';
-      cfg.bots.forEach(b => addBotRow(b.name, b.profile));
+      cfg.bots.forEach(b => addBotRow(b.name, b.profile, b.stateDir));
     }
 
     // Budget
@@ -981,8 +984,11 @@
     arrow.textContent = open ? '▼' : '▶';
   }
 
-  function addBotRow(name = '', profile = '') {
+  function addBotRow(name = '', profile = '', stateDir = '') {
     const container = document.getElementById('bot-rows');
+    const wrapper = document.createElement('div');
+    wrapper.className = 'bot-wrapper';
+
     const row = document.createElement('div');
     row.className = 'bot-row';
 
@@ -1001,19 +1007,42 @@
     const removeBtn = document.createElement('button');
     removeBtn.className = 'btn-remove-bot';
     removeBtn.textContent = '×';
-    removeBtn.onclick = () => row.remove();
+    removeBtn.onclick = () => wrapper.remove();
 
     row.appendChild(nameInput);
     row.appendChild(profileInput);
     row.appendChild(removeBtn);
-    container.appendChild(row);
+
+    const sdRow = document.createElement('div');
+    sdRow.className = 'bot-statedir-row' + (profile ? ' visible' : '');
+    const sdInput = document.createElement('input');
+    sdInput.type = 'text';
+    sdInput.className = 'statedir-input';
+    sdInput.placeholder = 'State directory (optional) e.g. /home/user/.openclaw-profilename';
+    sdInput.value = stateDir || '';
+    sdRow.appendChild(sdInput);
+
+    profileInput.addEventListener('input', () => {
+      sdRow.classList.toggle('visible', !!profileInput.value.trim());
+    });
+
+    wrapper.appendChild(row);
+    wrapper.appendChild(sdRow);
+    container.appendChild(wrapper);
   }
 
   function getBots() {
-    return [...document.querySelectorAll('.bot-row')].map(row => ({
-      name: row.querySelector('.bot-name-input').value.trim() || 'Bot',
-      profile: row.querySelector('.profile-input').value.trim() || null
-    })).filter(b => b.name);
+    return [...document.querySelectorAll('.bot-wrapper')].map(wrapper => {
+      const row = wrapper.querySelector('.bot-row');
+      const sd = wrapper.querySelector('.statedir-input');
+      const bot = {
+        name: row.querySelector('.bot-name-input').value.trim() || 'Bot',
+        profile: row.querySelector('.profile-input').value.trim() || null
+      };
+      const stateDir = sd ? sd.value.trim() : '';
+      if (stateDir) bot.stateDir = stateDir;
+      return bot;
+    }).filter(b => b.name);
   }
 
   // --- Alerts ---
