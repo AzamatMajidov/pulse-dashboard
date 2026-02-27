@@ -2687,6 +2687,54 @@
       } catch {}
     }
 
+    function humanCron(sched) {
+      if (!sched) return '--';
+      if (typeof sched === 'string') return sched || '--';
+      if (sched.at) {
+        try { var d = new Date(sched.at); return d.toLocaleString('en-GB', {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}); } catch(e) { return sched.at; }
+      }
+      if (!sched.expr) return JSON.stringify(sched);
+      var p = sched.expr.trim().split(/\s+/);
+      if (p.length < 5) return sched.expr;
+      var min=p[0], hr=p[1], dom=p[2], mon=p[3], dow=p[4];
+      var months = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      var days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+      var time = '';
+      // Build time string
+      if (hr.includes(',') || hr.includes('-') || min.includes(',') || min.includes('/')) {
+        // Complex: every N min, ranges
+        if (min.includes('/')) { var iv = min.split('/')[1]; time = 'Every ' + iv + 'm'; }
+        else if (min.includes(',')) { time = 'At :' + min.replace(/,/g, ', :'); }
+        else time = sched.expr;
+        if (hr !== '*') {
+          var hrPart = hr.replace('-', '–');
+          time += ', ' + hrPart;
+          if (!time.includes('AM') && !time.includes('PM')) time += 'h';
+        }
+      } else if (hr !== '*' && min !== '*') {
+        time = (hr.length < 2 ? '0'+hr : hr) + ':' + (min.length < 2 ? '0'+min : min);
+      } else if (hr !== '*') {
+        time = hr + ':00';
+      } else {
+        time = 'Every min';
+      }
+      // Build frequency
+      if (dom === '*' && mon === '*' && dow === '*') return 'Daily ' + time;
+      if (dom === '*' && mon === '*' && dow !== '*') {
+        var dayNames = dow.split(',').map(function(d) { return days[parseInt(d)] || d; }).join(', ');
+        return dayNames + ' ' + time;
+      }
+      if (mon !== '*' && dom !== '*') {
+        var m = months[parseInt(mon)] || mon;
+        return m + ' ' + dom + ', ' + time;
+      }
+      if (dom !== '*' && mon === '*') {
+        var suffix = dom === '1' ? 'st' : dom === '2' ? 'nd' : dom === '3' ? 'rd' : 'th';
+        return dom + suffix + ' of month, ' + time;
+      }
+      return sched.expr;
+    }
+
     function renderCronJobs(jobs) {
       if (!_cronSupported) return;
       document.getElementById('cron-section-header').style.display = '';
@@ -2730,11 +2778,7 @@
         schedBadge.className = 'service-badge badge-green';
         schedBadge.style.cssText = 'background:var(--cyan-dim);color:var(--cyan);flex-shrink:0';
         var sched = job.schedule;
-        if (typeof sched === 'object') {
-          if (sched.expr) schedBadge.textContent = sched.expr;
-          else if (sched.at) { try { var d = new Date(sched.at); schedBadge.textContent = d.toLocaleString('en-GB', {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}); } catch(e) { schedBadge.textContent = sched.at; } }
-          else schedBadge.textContent = JSON.stringify(sched);
-        } else { schedBadge.textContent = sched || '--'; }
+        schedBadge.textContent = humanCron(sched);
 
         left.append(dot, nameEl, schedBadge);
 
