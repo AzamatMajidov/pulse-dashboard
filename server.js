@@ -570,7 +570,7 @@ function getBotStatus(name, profile) {
   // Stale or no cache — return immediately (stale data or empty), refresh in background
   if (!cached || !cached.refreshing) {
     if (cached) cached.refreshing = true;
-    else botCache[key] = { time: 0, data: { online: false, lastActive: '...', model: '...', uptime: '...', sessions: 0, totalTokens: 0, contextTokens: 200000, contextPercent: 0, heartbeatEnabled: false, heartbeatInterval: null, heartbeatEveryMs: null, lastActiveAgeMs: null, sessionStarted: null, activeSessions24h: 0 }, refreshing: true };
+    else botCache[key] = { time: 0, data: { online: false, lastActive: '...', model: '...', uptime: '...', sessions: 0, totalTokens: 0, contextTokens: 200000, contextPercent: 0, inputTokens: 0, outputTokens: 0, cacheRead: 0, cacheWrite: 0, heartbeatEnabled: false, heartbeatInterval: null, heartbeatEveryMs: null, lastActiveAgeMs: null, sessionStarted: null, activeSessions24h: 0 }, refreshing: true };
     fetchBotStatus(name, profile).catch(() => {});
   }
 
