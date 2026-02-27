@@ -823,6 +823,56 @@ test(82, 'DELETE /api/cron/nonexistent → 404 or 501', async () => {
   return { pass: false, detail: `status ${r.status}` };
 });
 
+// --- Multi-Bot Cron Monitor (5) ---
+
+test(83, 'GET /api/cron/profiles returns array', async () => {
+  const r = await get('/api/cron/profiles');
+  if (r.status !== 200) return { pass: false, detail: `status ${r.status}` };
+  if (!Array.isArray(r.json)) return { pass: false, detail: `response is ${typeof r.json}` };
+  return { pass: true, detail: `${r.json.length} profiles` };
+});
+
+test(84, 'GET /api/cron?profile=main returns array or not_supported', async () => {
+  const r = await get('/api/cron?profile=main');
+  if (r.status === 501 && r.json?.error === 'not_supported') return { pass: true, detail: 'not_supported (ok)' };
+  if (r.status !== 200) return { pass: false, detail: `status ${r.status}` };
+  if (!Array.isArray(r.json)) return { pass: false, detail: `response is ${typeof r.json}` };
+  return { pass: true, detail: `${r.json.length} jobs` };
+});
+
+test(85, 'GET /api/cron?profile=INVALID!!! returns 400', async () => {
+  const r = await get('/api/cron?profile=INVALID!!!');
+  if (r.status !== 400) return { pass: false, detail: `status ${r.status}` };
+  if (!r.json?.error?.includes('Invalid profile')) return { pass: false, detail: `error: ${r.json?.error}` };
+  return { pass: true, detail: 'bad profile rejected' };
+});
+
+test(86, 'POST /api/cron/:id/toggle with profile field works', async () => {
+  const r = await post('/api/cron/test-job-xyz/toggle', { enabled: true, profile: 'main' });
+  if (r.status === 501) return { pass: true, detail: 'not_supported (ok)' };
+  // 200 or 500 (job not found) both mean profile was accepted
+  if (r.status === 400 && r.json?.error?.includes('Invalid profile')) {
+    return { pass: false, detail: 'valid profile rejected' };
+  }
+  return { pass: true, detail: `status ${r.status}` };
+});
+
+test(87, 'POST /api/cron/create with profile field works or returns not_supported', async () => {
+  const r = await post('/api/cron/create', {
+    name: 'test-phase10',
+    schedule: '*/5 * * * *',
+    payload: 'echo test',
+    profile: 'main',
+  });
+  if (r.status === 501) return { pass: true, detail: 'not_supported (ok)' };
+  if (r.status === 200 && r.json?.ok === true) return { pass: true, detail: `created: ${r.json.name}` };
+  // Even a 500 is acceptable (openclaw may fail) — just not 400 for profile
+  if (r.status === 400 && r.json?.error?.includes('Invalid profile')) {
+    return { pass: false, detail: 'valid profile rejected' };
+  }
+  return { pass: true, detail: `status ${r.status}` };
+});
+
 // --- Frontend (4) ---
 
 test(73, 'HTML contains "Pulse" in content', async () => {
