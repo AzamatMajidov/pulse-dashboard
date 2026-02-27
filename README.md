@@ -11,11 +11,11 @@ Dark UI. Zero cloud dependencies. Runs on anything — home server, VPS, Raspber
 - **System metrics** — CPU (+ temp), RAM, disk, network speed with historical sparklines (24h/7d/30d)
 - **Docker containers** — auto-discover or watch specific ones; restart buttons
 - **Systemd services** — monitor any user or system service; restart buttons
-- **OpenClaw bots** — online/offline status, model, uptime, analytics; gateway controls; per-bot model switcher
+- **OpenClaw bots** — online/offline status, model, uptime, analytics; gateway controls; per-bot model switcher with per-profile model dropdown
 - **Bot analytics** — session counts, token usage, and cost tracking per bot
-- **Cost tracker** — today/month cost totals with daily breakdown chart
-- **Cron monitor** — view, create, toggle, delete, and run OpenClaw cron jobs from the dashboard
-- **Multi-bot cron** — per-profile tabs and profile selector for managing cron jobs across multiple bots
+- **Cost tracker** — today/month cost totals with daily breakdown chart; accurate per-model pricing with real token breakdown
+- **Cron monitor** — view, create, toggle, delete, and run OpenClaw cron jobs from the dashboard; human-readable schedule badges
+- **Multi-bot cron** — per-profile tabs and profile selector for managing cron jobs across multiple bots; supports `OPENCLAW_STATE_DIR`-based instances
 - **Telegram alerts** — rule-based alerts (CPU/RAM/disk thresholds, service/container/bot down); auto-detects OpenClaw credentials
 - **Live log tail** — stream `journalctl` or Docker logs in-browser with auto-scroll
 - **Historical charts** — background metrics collector; sparklines on every card; full-screen 24h/7d/30d charts
@@ -158,6 +158,30 @@ loginctl enable-linger $USER       # keep service running without login (VPS)
 ## License
 
 MIT
+
+---
+
+## Changelog
+
+### 2026-02-27
+- **Per-bot model dropdown** — each bot card shows its own configured models (not a shared global dropdown)
+- **Human-readable cron badges** — schedule displayed as "Every day at 9:00 AM" instead of raw cron expression
+- **Accurate cost calculation** — correct per-model pricing, more models covered, real input/output token breakdown
+- **stateDir support** — `bots[].stateDir` config option for `OPENCLAW_STATE_DIR`-based multi-profile setups
+- **UX:** bots show "Loading…" during cache warmup instead of "Offline"; cost and cron sections render immediately with a loading state
+
+### 2026-02-26
+- Phase 10.1: multi-bot cron monitor with per-profile tabs
+- Phase 9: cost tracker with daily breakdown chart
+- Phase 10: cron monitor (view, create, toggle, delete, run cron jobs)
+- Phase 8: bot analytics (sessions, token usage, cost per bot)
+
+### 2026-02-25
+- Phase 7: distribution — one-line install, setup.sh, systemd service, README overhaul
+- Phase 6: license / paywall (Ed25519 offline license, Pro tier, upgrade modal)
+- Phase 5: historical charts (sparklines, full-screen 24h/7d/30d, background collector)
+- Phase 4: live log tail (SSE, auto-scroll, ANSI strip, maximize)
+- Phases 1–3: Telegram alerts, restart buttons, gateway controls
 
 ---
 
