@@ -2730,7 +2730,7 @@
         var schedBadge = document.createElement('span');
         schedBadge.className = 'service-badge badge-green';
         schedBadge.style.cssText = 'background:var(--cyan-dim);color:var(--cyan);flex-shrink:0';
-        schedBadge.textContent = job.schedule || '--';
+        schedBadge.textContent = (typeof job.schedule === 'object' ? (job.schedule.expr || job.schedule.at || JSON.stringify(job.schedule)) : job.schedule) || '--';
 
         left.append(dot, nameEl, schedBadge);
 
