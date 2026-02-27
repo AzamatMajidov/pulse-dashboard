@@ -1627,6 +1627,21 @@ app.get('/api/cron/profiles', requirePro, (req, res) => {
   res.json(bots.map(b => ({ name: b.name, profile: b.profile || 'main' })));
 });
 
+// Helper: read cron jobs — prefer direct file read when stateDir is configured
+async function getCronJobs(profile) {
+  const bot = (CONFIG.bots || []).find(b => (b.profile || null) === (profile || null));
+  if (bot && bot.stateDir) {
+    try {
+      const data = JSON.parse(await fs.promises.readFile(path.join(bot.stateDir, 'cron', 'jobs.json'), 'utf8'));
+      return data.jobs || [];
+    } catch { return []; }
+  }
+  // Fallback to CLI for bots without stateDir
+  const out = await run(openclawCmd(profile, 'cron list --json'), 10000);
+  if (!out) return [];
+  try { const d = JSON.parse(out); return Array.isArray(d) ? d : d.jobs || d.crons || []; } catch { return []; }
+}
+
 // T93 — GET /api/cron
 app.get('/api/cron', requirePro, async (req, res) => {
   try {
@@ -1639,14 +1654,7 @@ app.get('/api/cron', requirePro, async (req, res) => {
     if (cache.data && now - cache.time < CRON_CACHE_TTL) {
       return res.json(cache.data);
     }
-    const out = await run(openclawCmd(profile, 'cron list --json'), 10000);
-    if (!out) {
-      cache.data = []; cache.time = now;
-      return res.json([]);
-    }
-    let jobs;
-    try { jobs = JSON.parse(out); } catch { jobs = []; }
-    if (!Array.isArray(jobs)) jobs = jobs.jobs || jobs.crons || [];
+    const jobs = await getCronJobs(profile);
     cache.data = jobs; cache.time = now;
     res.json(jobs);
   } catch (err) {
@@ -1758,10 +1766,8 @@ app.delete('/api/cron/:id', requirePro, async (req, res) => {
     // Verify job exists by checking cached list or fetching fresh
     let jobs = cache.data;
     if (!jobs || Date.now() - cache.time >= CRON_CACHE_TTL) {
-      const out = await run(openclawCmd(profile, 'cron list --json'), 10000);
-      if (!out) return res.status(501).json({ error: 'not_supported' });
-      try { jobs = JSON.parse(out); } catch { jobs = []; }
-      if (!Array.isArray(jobs)) jobs = jobs.jobs || jobs.crons || [];
+      jobs = await getCronJobs(profile);
+      if (!jobs || !jobs.length) return res.status(501).json({ error: 'not_supported' });
     }
     const exists = Array.isArray(jobs) && jobs.some(j => (j.id || j.name) === id);
     if (!exists) {
