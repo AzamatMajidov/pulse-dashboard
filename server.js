@@ -479,6 +479,15 @@ async function fetchBotStatus(name, profile) {
       sessions = json.sessions?.count || 0;
       contextTokens = json.sessions?.defaults?.contextTokens || 200000;
 
+      // Aggregate tokens across all recent sessions
+      let inputTokens = 0, outputTokens = 0, cacheRead = 0, cacheWrite = 0;
+      for (const s of recent) {
+        inputTokens += s.inputTokens || 0;
+        outputTokens += s.outputTokens || 0;
+        cacheRead += s.cacheRead || 0;
+        cacheWrite += s.cacheWrite || 0;
+      }
+
       // Main session (first/most recent)
       if (recent.length > 0) {
         const main = recent[0];
@@ -534,6 +543,7 @@ async function fetchBotStatus(name, profile) {
     const result = {
       online, lastActive, model, uptime,
       sessions, totalTokens, contextTokens, contextPercent,
+      inputTokens, outputTokens, cacheRead, cacheWrite,
       heartbeatEnabled, heartbeatInterval, heartbeatEveryMs,
       lastActiveAgeMs, sessionStarted, activeSessions24h
     };
@@ -810,9 +820,26 @@ function startHistoryCollector() {
 // ============================================================
 
 // T85 — Model pricing table (per 1M tokens, USD)
+// Source: https://docs.anthropic.com/en/docs/about-claude/models
 const DEFAULT_MODEL_PRICING = {
-  'claude-opus-4-6':   { input: 15, output: 75, cacheRead: 1.5, cacheWrite: 18.75 },
-  'claude-sonnet-4-6': { input: 3,  output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
+  // Opus
+  'claude-opus-4-6':   { input: 5,  output: 25,  cacheRead: 0.5,  cacheWrite: 6.25 },
+  'claude-opus-4-5':   { input: 5,  output: 25,  cacheRead: 0.5,  cacheWrite: 6.25 },
+  // Sonnet
+  'claude-sonnet-4-6': { input: 3,  output: 15,  cacheRead: 0.3,  cacheWrite: 3.75 },
+  'claude-sonnet-4-5': { input: 3,  output: 15,  cacheRead: 0.3,  cacheWrite: 3.75 },
+  // Haiku
+  'claude-haiku-4-5':  { input: 1,  output: 5,   cacheRead: 0.1,  cacheWrite: 1.25 },
+  'claude-haiku-3-5':  { input: 0.8, output: 4,  cacheRead: 0.08, cacheWrite: 1 },
+  // GPT (approximate — users can override in config.json)
+  'gpt-4o':            { input: 2.5, output: 10,  cacheRead: 1.25, cacheWrite: 2.5 },
+  'gpt-4o-mini':       { input: 0.15, output: 0.6, cacheRead: 0.075, cacheWrite: 0.15 },
+  'gpt-4.1':           { input: 2,  output: 8,   cacheRead: 0.5,  cacheWrite: 2 },
+  'gpt-4.1-mini':      { input: 0.4, output: 1.6, cacheRead: 0.1, cacheWrite: 0.4 },
+  'gpt-4.1-nano':      { input: 0.1, output: 0.4, cacheRead: 0.025, cacheWrite: 0.1 },
+  // Gemini
+  'gemini-2.5-pro':    { input: 1.25, output: 10, cacheRead: 0.31, cacheWrite: 1.25 },
+  'gemini-2.5-flash':  { input: 0.15, output: 0.6, cacheRead: 0.04, cacheWrite: 0.15 },
 };
 
 function getModelPricing() {
