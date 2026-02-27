@@ -2729,7 +2729,12 @@
         var schedBadge = document.createElement('span');
         schedBadge.className = 'service-badge badge-green';
         schedBadge.style.cssText = 'background:var(--cyan-dim);color:var(--cyan);flex-shrink:0';
-        schedBadge.textContent = (typeof job.schedule === 'object' ? (job.schedule.expr || job.schedule.at || JSON.stringify(job.schedule)) : job.schedule) || '--';
+        var sched = job.schedule;
+        if (typeof sched === 'object') {
+          if (sched.expr) schedBadge.textContent = sched.expr;
+          else if (sched.at) { try { var d = new Date(sched.at); schedBadge.textContent = d.toLocaleString('en-GB', {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}); } catch(e) { schedBadge.textContent = sched.at; } }
+          else schedBadge.textContent = JSON.stringify(sched);
+        } else { schedBadge.textContent = sched || '--'; }
 
         left.append(dot, nameEl, schedBadge);
 
