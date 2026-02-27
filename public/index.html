@@ -2485,7 +2485,6 @@
     var _costData = null;
 
     async function fetchCosts() {
-      if (!_isProTier) return;
       try {
         var res = await fetch('/api/costs');
         if (res.status === 402) return; // not pro
