@@ -1565,18 +1565,23 @@
       }));
     }
 
-    // T34 — OpenClaw models cache
-    let _openclawModels = { primary: null, models: [] };
+    // T34 — OpenClaw models cache (per profile)
+    let _openclawModelsCache = {};
 
-    async function fetchOpenclawModels() {
+    async function fetchOpenclawModels(profile) {
+      var key = profile || 'main';
       try {
-        const res = await fetch('/api/openclaw/models');
-        _openclawModels = await res.json();
+        var url = '/api/openclaw/models' + (profile ? '?profile=' + encodeURIComponent(profile) : '');
+        var res = await fetch(url);
+        _openclawModelsCache[key] = await res.json();
       } catch {}
     }
 
-    // Fetch models on page load
-    fetchOpenclawModels();
+    function getModelsForProfile(profile) {
+      return _openclawModelsCache[profile || 'main'] || { primary: null, models: [] };
+    }
+
+    // Models fetched per-profile when bot data arrives from /api/metrics
 
     // Track bot cards with active gateway actions
     const _activeBotActions = new Set();
@@ -1686,10 +1691,13 @@
         const actionBar = document.createElement('div');
         actionBar.className = 'bot-action-bar';
 
-        // T34 — Model dropdown
+        // T34 — Model dropdown (per-bot profile)
+        var botProfile = bot.profile || null;
+        var botProfileKey = botProfile || 'main';
         const modelSelect = document.createElement('select');
-        modelSelect.title = 'Switch model (applies to all bots)';
-        if (_openclawModels.models.length === 0) {
+        modelSelect.title = 'Switch model for ' + bot.name;
+        var profileModels = getModelsForProfile(botProfile);
+        if (profileModels.models.length === 0) {
           const opt = document.createElement('option');
           opt.textContent = 'No models';
           opt.disabled = true;
@@ -1697,7 +1705,7 @@
           modelSelect.disabled = true;
         } else {
           var botModelId = bot.model ? 'anthropic/' + bot.model : '';
-          _openclawModels.models.forEach(function(m) {
+          profileModels.models.forEach(function(m) {
             const opt = document.createElement('option');
             opt.value = m.id;
             var label = m.alias || m.id.replace('anthropic/', '');
@@ -1722,12 +1730,12 @@
             var res = await fetch('/api/openclaw/model', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ model: selectedModel })
+              body: JSON.stringify({ model: selectedModel, profile: botProfile })
             });
             var data = await res.json();
             if (data.ok) {
-              showToast('Model switched to ' + selectedModel.replace('anthropic/', ''));
-              await fetchOpenclawModels();
+              showToast('Model switched to ' + selectedModel.replace('anthropic/', '') + ' for ' + bot.name);
+              await fetchOpenclawModels(botProfile);
               await fetchMetrics();
             } else {
               showToast('Failed: ' + (data.error || 'unknown error'));
@@ -1903,7 +1911,14 @@
         if (d.services?.systemd) renderSystemd(d.services.systemd);
 
         // Bots
-        if (Array.isArray(d.bots)) renderBots(d.bots);
+        if (Array.isArray(d.bots)) {
+          // Fetch models for any new profiles we haven't seen
+          d.bots.forEach(function(b) {
+            var key = b.profile || 'main';
+            if (!_openclawModelsCache[key]) fetchOpenclawModels(b.profile || null);
+          });
+          renderBots(d.bots);
+        }
 
         // Last updated
         const ts = new Date(d.timestamp);

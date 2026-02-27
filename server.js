@@ -1071,7 +1071,7 @@ app.get('/api/detect/services', async (req, res) => {
 // --- Metrics ---
 app.get('/api/metrics', async (req, res) => {
   try {
-    const botPromises = (CONFIG.bots || []).map(b => getBotStatus(b.name, b.profile));
+    const botPromises = (CONFIG.bots || []).map(b => getBotStatus(b.name, b.profile).then(r => r ? { ...r, profile: b.profile || null } : r));
     const [cpuUsage, cpuTemp, ram, disk, network, docker, systemd, weather, ...botResults] = await Promise.all([
       getCpuUsage(), getCpuTemp(), getRam(), getDisk(),
       getNetworkSpeed(), getDockerContainers(), getSystemdServices(),
@@ -1296,7 +1296,16 @@ app.post('/api/action/restart-docker', async (req, res) => {
 // T29 — GET /api/openclaw/models
 app.get('/api/openclaw/models', async (req, res) => {
   try {
-    const ocPath = path.join(os.homedir(), '.openclaw', 'openclaw.json');
+    const profile = req.query.profile || null;
+    const bot = (CONFIG.bots || []).find(b => (b.profile || null) === profile);
+    let ocPath;
+    if (bot && bot.stateDir) {
+      ocPath = path.join(bot.stateDir, 'openclaw.json');
+    } else if (profile && profile !== 'main') {
+      ocPath = path.join(os.homedir(), `.openclaw-${profile}`, 'openclaw.json');
+    } else {
+      ocPath = path.join(os.homedir(), '.openclaw', 'openclaw.json');
+    }
     const raw = await fs.promises.readFile(ocPath, 'utf8');
     const oc = JSON.parse(raw);
     const primary = oc?.agents?.defaults?.model?.primary || null;
@@ -1329,11 +1338,19 @@ app.post('/api/openclaw/gateway', async (req, res) => {
 // T31 — POST /api/openclaw/model
 app.post('/api/openclaw/model', async (req, res) => {
   try {
-    const { model } = req.body;
+    const { model, profile } = req.body;
     if (!model || typeof model !== 'string') {
       return res.status(400).json({ ok: false, error: 'Model is required' });
     }
-    const ocPath = path.join(os.homedir(), '.openclaw', 'openclaw.json');
+    const bot = (CONFIG.bots || []).find(b => (b.profile || null) === (profile || null));
+    let ocPath;
+    if (bot && bot.stateDir) {
+      ocPath = path.join(bot.stateDir, 'openclaw.json');
+    } else if (profile && profile !== 'main') {
+      ocPath = path.join(os.homedir(), `.openclaw-${profile}`, 'openclaw.json');
+    } else {
+      ocPath = path.join(os.homedir(), '.openclaw', 'openclaw.json');
+    }
     const raw = await fs.promises.readFile(ocPath, 'utf8');
     const oc = JSON.parse(raw);
     if (!oc.agents) oc.agents = {};
@@ -1341,7 +1358,9 @@ app.post('/api/openclaw/model', async (req, res) => {
     if (!oc.agents.defaults.model) oc.agents.defaults.model = {};
     oc.agents.defaults.model.primary = model;
     await fs.promises.writeFile(ocPath, JSON.stringify(oc, null, 2));
-    await run('openclaw gateway restart', 15000);
+    // Restart the correct gateway
+    const restartCmd = openclawCmd(profile || null, 'gateway restart');
+    await run(restartCmd, 15000);
     // Invalidate bot cache so next fetch gets fresh status
     Object.keys(botCache).forEach(k => { botCache[k].time = 0; });
     res.json({ ok: true, model });
