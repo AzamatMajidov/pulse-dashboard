@@ -12,6 +12,10 @@ Dark UI. Zero cloud dependencies. Runs on anything — home server, VPS, Raspber
 - **Docker containers** — auto-discover or watch specific ones; restart buttons
 - **Systemd services** — monitor any user or system service; restart buttons
 - **OpenClaw bots** — online/offline status, model, uptime, analytics; gateway controls; per-bot model switcher
+- **Bot analytics** — session counts, token usage, and cost tracking per bot
+- **Cost tracker** — today/month cost totals with daily breakdown chart
+- **Cron monitor** — view, create, toggle, delete, and run OpenClaw cron jobs from the dashboard
+- **Multi-bot cron** — per-profile tabs and profile selector for managing cron jobs across multiple bots
 - **Telegram alerts** — rule-based alerts (CPU/RAM/disk thresholds, service/container/bot down); auto-detects OpenClaw credentials
 - **Live log tail** — stream `journalctl` or Docker logs in-browser with auto-scroll
 - **Historical charts** — background metrics collector; sparklines on every card; full-screen 24h/7d/30d charts
