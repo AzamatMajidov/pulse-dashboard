@@ -598,7 +598,7 @@ async function fetchWeather() {
     let lat = CONFIG.weatherLat, lon = CONFIG.weatherLon;
     if (!lat || !lon) {
       // Fallback geocode if lat/lon not cached in config (e.g. old config)
-      const loc = CONFIG.weatherLocation || 'Tashkent';
+      const loc = CONFIG.weatherLocation || 'London';
       const geoData = await httpGet(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(loc)}&count=1`);
       const geoJson = JSON.parse(geoData);
       if (!geoJson.results || !geoJson.results.length) throw new Error('Location not found: ' + loc);
