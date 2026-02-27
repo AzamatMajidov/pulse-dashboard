@@ -1605,25 +1605,43 @@ app.post('/api/update/apply', async (req, res) => {
 // T93-T97: Cron Monitor (Phase 10)
 // ============================================================
 
-let cronCache = { data: null, time: 0 };
+const cronCaches = {};
 const CRON_CACHE_TTL = 30 * 1000;
+function getCronCache(profile) {
+  const key = profile || 'main';
+  if (!cronCaches[key]) cronCaches[key] = { data: null, time: 0 };
+  return cronCaches[key];
+}
+function profileFlag(p) { return p && p !== 'main' ? '--profile ' + p + ' ' : ''; }
+
+// T101 — GET /api/cron/profiles
+app.get('/api/cron/profiles', requirePro, (req, res) => {
+  const bots = CONFIG.bots || [];
+  if (bots.length <= 1) return res.json([]);
+  res.json(bots.map(b => ({ name: b.name, profile: b.profile || 'main' })));
+});
 
 // T93 — GET /api/cron
 app.get('/api/cron', requirePro, async (req, res) => {
   try {
-    const now = Date.now();
-    if (cronCache.data && now - cronCache.time < CRON_CACHE_TTL) {
-      return res.json(cronCache.data);
+    const profile = req.query.profile || 'main';
+    if (!/^[a-zA-Z0-9_-]+$/.test(profile)) {
+      return res.status(400).json({ error: 'Invalid profile' });
     }
-    const out = await run('openclaw cron list --json', 10000);
+    const cache = getCronCache(profile);
+    const now = Date.now();
+    if (cache.data && now - cache.time < CRON_CACHE_TTL) {
+      return res.json(cache.data);
+    }
+    const out = await run(profileFlag(profile) + 'openclaw cron list --json', 10000);
     if (!out) {
-      cronCache = { data: [], time: now };
+      cache.data = []; cache.time = now;
       return res.json([]);
     }
     let jobs;
     try { jobs = JSON.parse(out); } catch { jobs = []; }
     if (!Array.isArray(jobs)) jobs = jobs.jobs || jobs.crons || [];
-    cronCache = { data: jobs, time: now };
+    cache.data = jobs; cache.time = now;
     res.json(jobs);
   } catch (err) {
     if (err.message && (err.message.includes('not found') || err.message.includes('ENOENT'))) {
@@ -1640,10 +1658,14 @@ app.post('/api/cron/:id/toggle', requirePro, async (req, res) => {
     if (!id || !/^[a-zA-Z0-9._:-]+$/.test(id)) {
       return res.status(400).json({ ok: false, error: 'Invalid cron job ID' });
     }
+    const profile = req.body.profile || 'main';
+    if (!/^[a-zA-Z0-9_-]+$/.test(profile)) {
+      return res.status(400).json({ ok: false, error: 'Invalid profile' });
+    }
     const { enabled } = req.body;
     const action = enabled ? 'enable' : 'disable';
-    const out = await run(`openclaw cron ${action} ${id}`, 10000);
-    cronCache.time = 0; // invalidate cache
+    await run(profileFlag(profile) + `openclaw cron ${action} ${id}`, 10000);
+    getCronCache(profile).time = 0;
     res.json({ ok: true, id, enabled: !!enabled });
   } catch (err) {
     if (err.message && (err.message.includes('not found') || err.message.includes('ENOENT'))) {
@@ -1660,8 +1682,12 @@ app.post('/api/cron/:id/run', requirePro, async (req, res) => {
     if (!id || !/^[a-zA-Z0-9._:-]+$/.test(id)) {
       return res.status(400).json({ ok: false, error: 'Invalid cron job ID' });
     }
-    await run(`openclaw cron run ${id}`, 15000);
-    cronCache.time = 0; // invalidate cache
+    const profile = req.body.profile || 'main';
+    if (!/^[a-zA-Z0-9_-]+$/.test(profile)) {
+      return res.status(400).json({ ok: false, error: 'Invalid profile' });
+    }
+    await run(profileFlag(profile) + `openclaw cron run ${id}`, 15000);
+    getCronCache(profile).time = 0;
     res.json({ ok: true, id });
   } catch (err) {
     if (err.message && (err.message.includes('not found') || err.message.includes('ENOENT'))) {
@@ -1675,6 +1701,10 @@ app.post('/api/cron/:id/run', requirePro, async (req, res) => {
 app.post('/api/cron/create', requirePro, async (req, res) => {
   try {
     const { name, schedule, payload } = req.body;
+    const profile = req.body.profile || 'main';
+    if (!/^[a-zA-Z0-9_-]+$/.test(profile)) {
+      return res.status(400).json({ ok: false, error: 'Invalid profile' });
+    }
     if (!name || typeof name !== 'string' || !name.trim()) {
       return res.status(400).json({ ok: false, error: 'Name is required' });
     }
@@ -1696,8 +1726,8 @@ app.post('/api/cron/create', requirePro, async (req, res) => {
     if (!safeName) {
       return res.status(400).json({ ok: false, error: 'Invalid name' });
     }
-    const out = await run(`openclaw cron add --name "${safeName}" --schedule "${trimmed}" --payload "${payload.replace(/"/g, '\\"')}"`, 10000);
-    cronCache.time = 0;
+    await run(profileFlag(profile) + `openclaw cron add --name "${safeName}" --schedule "${trimmed}" --payload "${payload.replace(/"/g, '\\"')}"`, 10000);
+    getCronCache(profile).time = 0;
     res.json({ ok: true, name: safeName });
   } catch (err) {
     if (err.message && (err.message.includes('not found') || err.message.includes('ENOENT'))) {
@@ -1714,10 +1744,15 @@ app.delete('/api/cron/:id', requirePro, async (req, res) => {
     if (!id || !/^[a-zA-Z0-9._:-]+$/.test(id)) {
       return res.status(400).json({ ok: false, error: 'Invalid cron job ID' });
     }
+    const profile = req.query.profile || 'main';
+    if (!/^[a-zA-Z0-9_-]+$/.test(profile)) {
+      return res.status(400).json({ ok: false, error: 'Invalid profile' });
+    }
+    const cache = getCronCache(profile);
     // Verify job exists by checking cached list or fetching fresh
-    let jobs = cronCache.data;
-    if (!jobs || Date.now() - cronCache.time >= CRON_CACHE_TTL) {
-      const out = await run('openclaw cron list --json', 10000);
+    let jobs = cache.data;
+    if (!jobs || Date.now() - cache.time >= CRON_CACHE_TTL) {
+      const out = await run(profileFlag(profile) + 'openclaw cron list --json', 10000);
       if (!out) return res.status(501).json({ error: 'not_supported' });
       try { jobs = JSON.parse(out); } catch { jobs = []; }
       if (!Array.isArray(jobs)) jobs = jobs.jobs || jobs.crons || [];
@@ -1726,8 +1761,8 @@ app.delete('/api/cron/:id', requirePro, async (req, res) => {
     if (!exists) {
       return res.status(404).json({ ok: false, error: 'Cron job not found' });
     }
-    await run(`openclaw cron remove ${id}`, 10000);
-    cronCache.time = 0;
+    await run(profileFlag(profile) + `openclaw cron remove ${id}`, 10000);
+    cache.time = 0;
     res.json({ ok: true, id });
   } catch (err) {
     if (err.message && (err.message.includes('not found') || err.message.includes('ENOENT'))) {

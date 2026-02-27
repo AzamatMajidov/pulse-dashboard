@@ -1275,6 +1275,7 @@
     </div>
 
     <div id="cron-card-wrap" style="display:none;margin-bottom:28px">
+      <div id="cron-profile-tabs" style="display:none;margin-bottom:8px" class="chart-time-tabs"></div>
       <div class="card">
         <div class="service-list" id="cron-list">
           <div style="padding:16px;font-size:13px;color:var(--text-muted);text-align:center">Loading cron jobs...</div>
@@ -1347,6 +1348,10 @@
         <div>
           <label style="font-size:11px;color:var(--text-muted);letter-spacing:.1em;text-transform:uppercase;display:block;margin-bottom:4px">Task / Message</label>
           <textarea id="cron-create-payload" rows="3" placeholder="Enter task description..." style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;font-family:'JetBrains Mono',monospace;padding:8px 12px;outline:none;resize:vertical"></textarea>
+        </div>
+        <div id="cron-create-profile-wrap" style="display:none">
+          <label style="font-size:11px;color:var(--text-muted);letter-spacing:.1em;text-transform:uppercase;display:block;margin-bottom:4px">Bot Profile</label>
+          <select id="cron-create-profile" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;font-family:'JetBrains Mono',monospace;padding:8px 12px;outline:none;cursor:pointer"></select>
         </div>
         <button id="cron-create-submit" style="background:var(--cyan);color:#000;font-weight:600;padding:10px;border:none;border-radius:8px;font-size:14px;cursor:pointer">Create</button>
         <div id="cron-create-error" style="display:none;color:var(--red);font-size:12px"></div>
@@ -2632,11 +2637,48 @@
 
     var _cronJobs = null;
     var _cronSupported = true;
+    var _cronProfiles = [];
+    var _cronActiveProfile = 'main';
+
+    async function fetchCronProfiles() {
+      try {
+        var res = await fetch('/api/cron/profiles');
+        if (!res.ok) return;
+        _cronProfiles = await res.json();
+        renderCronProfileTabs();
+      } catch {}
+    }
+
+    function renderCronProfileTabs() {
+      var container = document.getElementById('cron-profile-tabs');
+      if (!Array.isArray(_cronProfiles) || _cronProfiles.length === 0) {
+        container.style.display = 'none';
+        return;
+      }
+      container.style.display = '';
+      container.replaceChildren();
+      _cronProfiles.forEach(function(p) {
+        var btn = document.createElement('button');
+        btn.className = 'chart-time-tab' + (p.profile === _cronActiveProfile ? ' active' : '');
+        btn.textContent = p.name;
+        btn.onclick = function() {
+          _cronActiveProfile = p.profile;
+          container.querySelectorAll('.chart-time-tab').forEach(function(t) { t.classList.remove('active'); });
+          btn.classList.add('active');
+          fetchCronJobs();
+        };
+        container.appendChild(btn);
+      });
+    }
 
     async function fetchCronJobs() {
       if (!_isProTier) return;
       try {
-        var res = await fetch('/api/cron');
+        var url = '/api/cron';
+        if (_cronActiveProfile && _cronActiveProfile !== 'main') {
+          url += '?profile=' + encodeURIComponent(_cronActiveProfile);
+        }
+        var res = await fetch(url);
         if (res.status === 402) return;
         if (res.status === 501) { _cronSupported = false; return; }
         if (!res.ok) return;
@@ -2652,6 +2694,7 @@
       document.getElementById('cron-card-wrap').style.display = '';
 
       var list = document.getElementById('cron-list');
+      var isMultiBot = _cronProfiles.length > 1;
 
       if (!Array.isArray(jobs) || jobs.length === 0) {
         list.replaceChildren();
@@ -2690,6 +2733,16 @@
         schedBadge.textContent = job.schedule || '--';
 
         left.append(dot, nameEl, schedBadge);
+
+        // Bot badge in multi-bot mode
+        if (isMultiBot) {
+          var botName = (_cronProfiles.find(function(p) { return p.profile === _cronActiveProfile; }) || {}).name || _cronActiveProfile;
+          var botBadge = document.createElement('span');
+          botBadge.className = 'service-badge';
+          botBadge.style.cssText = 'background:var(--bg3);color:var(--text-muted);font-size:10px;flex-shrink:0';
+          botBadge.textContent = botName;
+          left.appendChild(botBadge);
+        }
 
         var mid = document.createElement('div');
         mid.style.cssText = 'display:flex;gap:12px;font-size:11px;color:var(--text-muted);font-family:JetBrains Mono,monospace;flex-shrink:0';
@@ -2743,7 +2796,7 @@
         var res = await fetch('/api/cron/' + encodeURIComponent(id) + '/toggle', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ enabled: enable })
+          body: JSON.stringify({ enabled: enable, profile: _cronActiveProfile })
         });
         var data = await res.json();
         if (data.ok) {
@@ -2764,7 +2817,7 @@
         var res = await fetch('/api/cron/' + encodeURIComponent(id) + '/run', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: '{}'
+          body: JSON.stringify({ profile: _cronActiveProfile })
         });
         var data = await res.json();
         if (data.ok) {
@@ -2782,7 +2835,8 @@
     async function deleteCronJob(id, name) {
       if (!confirm('Delete cron job "' + (name || id) + '"?')) return;
       try {
-        var res = await fetch('/api/cron/' + encodeURIComponent(id), { method: 'DELETE' });
+        var profileParam = _cronActiveProfile && _cronActiveProfile !== 'main' ? '?profile=' + encodeURIComponent(_cronActiveProfile) : '';
+        var res = await fetch('/api/cron/' + encodeURIComponent(id) + profileParam, { method: 'DELETE' });
         var data = await res.json();
         if (data.ok) {
           showToast('Cron job deleted');
@@ -2801,6 +2855,22 @@
       document.getElementById('cron-create-preset').value = '*/15 * * * *';
       document.getElementById('cron-create-schedule').style.display = 'none';
       document.getElementById('cron-create-error').style.display = 'none';
+      // Populate profile selector in multi-bot mode
+      var profileWrap = document.getElementById('cron-create-profile-wrap');
+      var profileSel = document.getElementById('cron-create-profile');
+      if (_cronProfiles.length > 1) {
+        profileWrap.style.display = '';
+        profileSel.replaceChildren();
+        _cronProfiles.forEach(function(p) {
+          var opt = document.createElement('option');
+          opt.value = p.profile;
+          opt.textContent = p.name + ' (' + p.profile + ')';
+          if (p.profile === _cronActiveProfile) opt.selected = true;
+          profileSel.appendChild(opt);
+        });
+      } else {
+        profileWrap.style.display = 'none';
+      }
     });
 
     document.getElementById('cron-create-close').addEventListener('click', function() {
@@ -2826,6 +2896,7 @@
       var schedule = preset === 'custom' ? document.getElementById('cron-create-schedule').value.trim() : preset;
       var payload = document.getElementById('cron-create-payload').value.trim();
       var errEl = document.getElementById('cron-create-error');
+      var profile = _cronProfiles.length > 1 ? document.getElementById('cron-create-profile').value : _cronActiveProfile;
 
       if (!name) { errEl.textContent = 'Name is required'; errEl.style.display = ''; return; }
       if (!schedule) { errEl.textContent = 'Schedule is required'; errEl.style.display = ''; return; }
@@ -2839,7 +2910,7 @@
         var res = await fetch('/api/cron/create', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: name, schedule: schedule, payload: payload })
+          body: JSON.stringify({ name: name, schedule: schedule, payload: payload, profile: profile })
         });
         var data = await res.json();
         if (data.ok) {
@@ -2858,8 +2929,8 @@
       this.textContent = 'Create';
     });
 
-    // Fetch cron jobs on load and every 30s
-    fetchCronJobs();
+    // Fetch cron profiles then jobs on load, refresh every 30s
+    fetchCronProfiles().then(function() { fetchCronJobs(); });
     setInterval(fetchCronJobs, 30000);
 
     // --- T71: License Pro Gate ---
