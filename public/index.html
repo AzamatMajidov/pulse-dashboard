@@ -579,6 +579,8 @@
 
     .bot-status.online { color: var(--green); }
     .bot-status.offline { color: var(--red); }
+    .bot-status.loading { color: var(--text-dim); animation: pulse-loading 1.5s ease-in-out infinite; }
+    @keyframes pulse-loading { 0%,100% { opacity: .4; } 50% { opacity: 1; } }
 
     .bot-stats {
       display: grid;
@@ -1618,17 +1620,18 @@
         nameWrap.append(emoji, nameInfo);
 
         const status = document.createElement('div');
-        status.className = 'bot-status ' + (bot.online ? 'online' : 'offline');
-        status.textContent = bot.online ? '\u25CF Online' : '\u25CF Offline';
+        var isLoading = !bot.online && (bot.lastActive === '...' || bot.model === '...' || bot.lastActive === 'unknown' && bot.model === 'unknown' && bot.uptime === 'N/A' && bot.sessions === 0);
+        status.className = 'bot-status ' + (isLoading ? 'loading' : bot.online ? 'online' : 'offline');
+        status.textContent = isLoading ? '◌ Loading...' : bot.online ? '\u25CF Online' : '\u25CF Offline';
 
         header.append(nameWrap, status);
 
         const stats = document.createElement('div');
         stats.className = 'bot-stats';
         [
-          ['Last Active', bot.lastActive || '--'],
-          ['Model', (bot.model || '--').replace('claude-', '')],
-          ['Uptime', bot.uptime || '--']
+          ['Last Active', isLoading ? '...' : bot.lastActive || '--'],
+          ['Model', isLoading ? '...' : (bot.model || '--').replace('claude-', '')],
+          ['Uptime', isLoading ? '...' : bot.uptime || '--']
         ].forEach(function([label, value]) {
           const stat = document.createElement('div');
           stat.className = 'bot-stat';
