@@ -1240,12 +1240,12 @@
     </div>
 
     <!-- T90: COST SUMMARY -->
-    <div class="section-header" id="cost-section-header" style="display:none">
+    <div class="section-header" id="cost-section-header">
       <div class="section-title">Costs</div>
       <div class="section-line"></div>
     </div>
 
-    <div id="cost-card-wrap" style="display:none;margin-bottom:28px">
+    <div id="cost-card-wrap" style="margin-bottom:28px">
       <div class="card" id="cost-card" style="cursor:pointer">
         <div class="card-label"><span class="icon">💰</span> Token Costs</div>
         <div style="display:flex;gap:24px;align-items:baseline;flex-wrap:wrap">
@@ -1270,13 +1270,13 @@
     </div>
 
     <!-- T99: CRON MONITOR -->
-    <div class="section-header" id="cron-section-header" style="display:none">
+    <div class="section-header" id="cron-section-header">
       <div class="section-title">Cron Jobs</div>
       <div class="section-line"></div>
       <button class="action-btn" id="cron-add-btn" title="Add cron job" style="font-size:16px;width:28px;height:28px">+</button>
     </div>
 
-    <div id="cron-card-wrap" style="display:none;margin-bottom:28px">
+    <div id="cron-card-wrap" style="margin-bottom:28px">
       <div id="cron-profile-tabs" style="display:none;margin-bottom:8px" class="chart-time-tabs"></div>
       <div class="card">
         <div class="service-list" id="cron-list">
@@ -2504,8 +2504,7 @@
     }
 
     function renderCostCard(data) {
-      document.getElementById('cost-section-header').style.display = '';
-      document.getElementById('cost-card-wrap').style.display = '';
+      // Section already visible — no need to toggle display
 
       var todayEl = document.getElementById('cost-today');
       var weekEl = document.getElementById('cost-week');
@@ -2740,8 +2739,7 @@
 
     function renderCronJobs(jobs) {
       if (!_cronSupported) return;
-      document.getElementById('cron-section-header').style.display = '';
-      document.getElementById('cron-card-wrap').style.display = '';
+      // Section already visible — no need to toggle display
 
       var list = document.getElementById('cron-list');
       var isMultiBot = _cronProfiles.length > 1;
