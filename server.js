@@ -598,6 +598,10 @@ function httpGet(url, redirects = 5, timeoutMs = 8000) {
 }
 
 async function fetchWeather() {
+  // Skip weather entirely when no location is configured
+  if (!CONFIG.weatherLocation && !CONFIG.weatherLat && !CONFIG.weatherLon) {
+    return null;
+  }
   const now = Date.now();
   // Return cache if fresh (success) OR if recently failed (back off 2 min)
   if (weatherCacheTime && now - weatherCacheTime < CONFIG.weatherCacheTtl) {
@@ -608,7 +612,7 @@ async function fetchWeather() {
     let lat = CONFIG.weatherLat, lon = CONFIG.weatherLon;
     if (!lat || !lon) {
       // Fallback geocode if lat/lon not cached in config (e.g. old config)
-      const loc = CONFIG.weatherLocation || 'London';
+      const loc = CONFIG.weatherLocation;
       const geoData = await httpGet(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(loc)}&count=1`);
       const geoJson = JSON.parse(geoData);
       if (!geoJson.results || !geoJson.results.length) throw new Error('Location not found: ' + loc);
@@ -910,23 +914,28 @@ app.post('/api/setup', async (req, res) => {
   try {
     const cfg = req.body;
 
+    // Validate weather location first (if provided, must be a real city)
+    if (cfg.weatherLocation) {
+      try {
+        const geoData = await httpGet(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(cfg.weatherLocation)}&count=1`);
+        const geoJson = JSON.parse(geoData);
+        if (!geoJson.results || !geoJson.results.length) {
+          return res.status(400).json({ error: 'City not found. Please enter a valid city name.' });
+        }
+        cfg.weatherLat = geoJson.results[0].latitude;
+        cfg.weatherLon = geoJson.results[0].longitude;
+        cfg.weatherLocation = geoJson.results[0].name; // normalize to canonical name
+      } catch (geoErr) {
+        return res.status(500).json({ error: 'Failed to validate city: ' + geoErr.message });
+      }
+    } else {
+      // Empty weatherLocation — clear cached lat/lon so weather is disabled
+      delete cfg.weatherLat;
+      delete cfg.weatherLon;
+    }
+
     // Basic validation
     if (!cfg.port || isNaN(parseInt(cfg.port))) return res.status(400).json({ error: 'Invalid port' });
-    if (!cfg.weatherLocation) return res.status(400).json({ error: 'Weather location required' });
-
-    // Validate & geocode weather location
-    try {
-      const geoData = await httpGet(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(cfg.weatherLocation)}&count=1`);
-      const geoJson = JSON.parse(geoData);
-      if (!geoJson.results || !geoJson.results.length) {
-        return res.status(400).json({ error: `City not found: "${cfg.weatherLocation}". Check spelling.` });
-      }
-      cfg.weatherLat = geoJson.results[0].latitude;
-      cfg.weatherLon = geoJson.results[0].longitude;
-      cfg.weatherLocation = geoJson.results[0].name; // normalize to canonical name
-    } catch (geoErr) {
-      return res.status(500).json({ error: 'Failed to validate city: ' + geoErr.message });
-    }
 
     // Normalize types
     cfg.port = parseInt(cfg.port);
