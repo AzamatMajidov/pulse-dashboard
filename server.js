@@ -1253,6 +1253,10 @@ app.get('/api/openclaw/models', async (req, res) => {
       alias: meta.alias || null,
       active: id === primary
     }));
+    // If no models configured but primary exists, show primary as the only option
+    if (models.length === 0 && primary) {
+      models.push({ id: primary, alias: primary.split('/').pop(), active: true });
+    }
     res.json({ primary, models });
   } catch {
     res.json({ primary: null, models: [] });
