@@ -1487,6 +1487,10 @@
     function renderDocker(containers) {
       if (containers.some(function(c) { return _activeActions.has(c.name); })) return;
       const list = document.getElementById('docker-list');
+      if (!containers.length) {
+        list.innerHTML = '<div style="font-size:13px;color:var(--text-muted);text-align:center;padding:12px">No containers found</div>';
+        return;
+      }
       list.replaceChildren(...containers.map(function(c) {
         return makeServiceRow(c.name, c.running, c.running ? 'running' : 'stopped', c.uptime, 'docker');
       }));
@@ -1496,6 +1500,10 @@
     function renderSystemd(services) {
       if (services.some(function(s) { return _activeActions.has(s.name); })) return;
       const list = document.getElementById('systemd-list');
+      if (!services.length) {
+        list.innerHTML = '<div style="font-size:13px;color:var(--text-muted);text-align:center;padding:12px">No services configured</div>';
+        return;
+      }
       list.replaceChildren(...services.map(function(s) {
         return makeServiceRow(s.name, s.active, s.active ? 'active' : 'inactive', s.uptime, 'service');
       }));
@@ -1526,6 +1534,10 @@
     // T33-T37: includes action bar with model dropdown, restart/stop, confirmation, spinner
     function renderBots(bots) {
       const grid = document.getElementById('bots-grid');
+      if (!bots || !bots.length) {
+        grid.innerHTML = '<div style="font-size:13px;color:var(--text-muted);text-align:center;padding:12px">No OpenClaw agents detected — <a href="/settings" style="color:var(--cyan)">configure in settings</a></div>';
+        return;
+      }
       grid.replaceChildren(...bots.map(bot => {
         // Skip re-render if this bot has an active action
         if (_activeBotActions.has(bot.name)) {
