@@ -177,19 +177,6 @@
       background: var(--border);
     }
 
-    .tier-dot {
-      position: absolute;
-      top: 4px;
-      right: 4px;
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      border: 1.5px solid var(--card-bg);
-    }
-
-    .tier-dot.free { background: #f59e0b; }
-    .tier-dot.pro { background: #22c55e; }
-
     /* === SECTION HEADER === */
     .section-header {
       display: flex;
@@ -495,45 +482,6 @@
     .toast.show {
       opacity: 1;
       transform: translateX(-50%) translateY(0);
-    }
-
-    /* T71 — License tier badge */
-    .tier-badge {
-      font-size: 10px;
-      font-weight: 700;
-      padding: 2px 8px;
-      border-radius: 20px;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-      font-family: 'Inter', sans-serif;
-    }
-    .tier-badge.free {
-      background: var(--bg3);
-      color: var(--text-muted);
-      border: 1px solid var(--border);
-    }
-    .tier-badge.pro {
-      background: var(--green-dim);
-      color: var(--green);
-      border: 1px solid var(--green);
-    }
-
-    /* Lock overlay for pro-gated buttons */
-    .pro-locked {
-      position: relative;
-      pointer-events: none;
-      opacity: 0.4;
-    }
-    .pro-locked::after {
-      content: '🔒';
-      position: absolute;
-      inset: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 10px;
-      pointer-events: auto;
-      cursor: pointer;
     }
 
     /* === BOT CARDS === */
@@ -1135,8 +1083,6 @@
             </div>
           </div>
         </div>
-        <!-- Hidden tier badge for JS reference -->
-        <span id="tier-badge" style="display:none"></span>
       </div>
     </div>
 
@@ -1461,23 +1407,13 @@
         logsBtn.className = 'action-btn';
         logsBtn.title = 'Logs';
         logsBtn.textContent = '\uD83D\uDCCB';
-        if (!_isProTier) {
-          logsBtn.classList.add('pro-locked');
-          logsBtn.onclick = proGateClick;
-        } else {
-          logsBtn.onclick = function() { openLogDrawer(name, type); };
-        }
+        logsBtn.onclick = function() { openLogDrawer(name, type); };
         // T23/T24 — Restart button
         var restartBtn = document.createElement('button');
         restartBtn.className = 'action-btn';
         restartBtn.title = 'Restart';
         restartBtn.textContent = '\u27F3';
-        if (!_isProTier) {
-          restartBtn.classList.add('pro-locked');
-          restartBtn.onclick = proGateClick;
-        } else {
-          restartBtn.onclick = renderConfirm;
-        }
+        restartBtn.onclick = renderConfirm;
         right.append(badgeEl, uptimeEl, logsBtn, restartBtn);
       }
 
@@ -1716,12 +1652,7 @@
           });
         }
 
-        if (!_isProTier) {
-          modelSelect.disabled = true;
-          modelSelect.title = 'Pro feature';
-        }
         modelSelect.onchange = async function() {
-          if (!_isProTier) { proGateClick(event); return; }
           var selectedModel = modelSelect.value;
           if (!selectedModel) return;
           _activeBotActions.add(bot.name);
@@ -1788,15 +1719,8 @@
           stopBtn.style.display = '';
         }
 
-        if (!_isProTier) {
-          restartBtn.classList.add('pro-locked');
-          restartBtn.onclick = proGateClick;
-          stopBtn.classList.add('pro-locked');
-          stopBtn.onclick = proGateClick;
-        } else {
-          restartBtn.onclick = function() { showConfirm('Restart', 'restart'); };
-          stopBtn.onclick = function() { showConfirm('Stop', 'stop'); };
-        }
+        restartBtn.onclick = function() { showConfirm('Restart', 'restart'); };
+        stopBtn.onclick = function() { showConfirm('Stop', 'stop'); };
 
         // T36 — Spinner overlay
         var overlay = null;
@@ -2433,7 +2357,6 @@
     let alertDropdownOpen = false;
 
     function toggleAlertDropdown() {
-      if (!_isProTier) { showToast('Pro feature \u2014 enter license key in Settings'); return; }
       alertDropdownOpen = !alertDropdownOpen;
       document.getElementById('alert-dropdown').style.display = alertDropdownOpen ? 'block' : 'none';
       if (alertDropdownOpen) fetchAlertStatus();
@@ -2688,7 +2611,6 @@
     }
 
     async function fetchCronJobs() {
-      if (!_isProTier) return;
       try {
         var url = '/api/cron';
         if (_cronActiveProfile && _cronActiveProfile !== 'main') {
@@ -2997,74 +2919,6 @@
     fetchCronProfiles().then(function() { fetchCronJobs(); });
     setInterval(fetchCronJobs, 30000);
 
-    // --- T71: License Pro Gate ---
-    let _isProTier = true;
-
-    async function fetchLicenseStatus() {
-      try {
-        _isProTier = true;
-        var dot = document.getElementById('tier-dot');
-        if (dot) dot.style.display = 'none';
-        applyProGate();
-      } catch {}
-    }
-
-    function applyProGate() {
-      // Lock/unlock pro-gated action buttons based on tier
-      // Restart + logs buttons in service rows, alert bell, bot action bar controls
-      // These are re-applied after each metrics render, so we hook into the render cycle
-    }
-
-    function proGateClick(e) {
-      e.stopPropagation();
-      e.preventDefault();
-      showUpgradeModal();
-    }
-
-    function showUpgradeModal() {
-      if (document.getElementById('upgrade-modal-overlay')) {
-        document.getElementById('upgrade-modal-overlay').classList.add('open');
-        return;
-      }
-      var overlay = document.createElement('div');
-      overlay.id = 'upgrade-modal-overlay';
-      overlay.className = 'chart-modal-overlay open';
-      overlay.onclick = function(e) { if (e.target === overlay) overlay.classList.remove('open'); };
-
-      var modal = document.createElement('div');
-      modal.className = 'chart-modal';
-      modal.style.maxWidth = '480px';
-      modal.style.textAlign = 'center';
-      modal.style.padding = '32px';
-      modal.innerHTML = '<div style="font-size:36px;margin-bottom:16px">\uD83D\uDD13</div>'
-        + '<div style="font-size:18px;font-weight:600;color:var(--text);margin-bottom:8px">Upgrade to Pro</div>'
-        + '<div style="color:var(--text-muted);font-size:13px;margin-bottom:20px;line-height:1.6">'
-        + 'Unlock Telegram alerts, service restarts, gateway controls, live logs, and model switching.'
-        + '</div>'
-        + '<div style="display:flex;gap:12px;justify-content:center;margin-bottom:20px">'
-        + '<div style="background:var(--cyan-dim);border:1px solid var(--cyan);border-radius:8px;padding:12px 20px">'
-        + '<div style="color:var(--cyan);font-size:20px;font-weight:700">$3<span style="font-size:12px;font-weight:400">/mo</span></div>'
-        + '</div>'
-        + '<div style="background:var(--cyan-dim);border:1px solid var(--cyan);border-radius:8px;padding:12px 20px">'
-        + '<div style="color:var(--cyan);font-size:20px;font-weight:700">$19<span style="font-size:12px;font-weight:400">/yr</span></div>'
-        + '<div style="color:var(--text-muted);font-size:10px">Save 47%</div>'
-        + '</div>'
-        + '</div>'
-        + '<a href="https://github.com/AzamatMajidov/pulse-dashboard#pro" target="_blank" '
-        + 'style="display:inline-block;background:var(--cyan);color:#000;font-weight:600;padding:10px 28px;border-radius:8px;text-decoration:none;font-size:14px;margin-bottom:12px">'
-        + 'Get Pro \u2192</a>'
-        + '<div style="color:var(--text-muted);font-size:11px">Or enter your license key in <a href="/settings" style="color:var(--cyan)">Settings</a></div>';
-
-      var closeBtn = document.createElement('button');
-      closeBtn.className = 'chart-close-btn';
-      closeBtn.textContent = '\u00D7';
-      closeBtn.onclick = function() { overlay.classList.remove('open'); };
-      modal.appendChild(closeBtn);
-      overlay.appendChild(modal);
-      document.body.appendChild(overlay);
-    }
-
-    fetchLicenseStatus();
   </script>
 </body>
 </html>

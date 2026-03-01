@@ -1194,68 +1194,6 @@
     }).filter(r => r.metric);
   }
 
-  // --- License ---
-  function toggleLicense() {
-    const body = document.getElementById('license-body');
-    const arrow = document.getElementById('license-arrow');
-    const open = body.classList.toggle('open');
-    arrow.textContent = open ? '▼' : '▶';
-    if (open) fetchLicenseStatus();
-  }
-
-  async function fetchLicenseStatus() {
-    try {
-      const res = await fetch('/api/license/status');
-      const data = await res.json();
-      const badge = document.getElementById('license-tier-badge');
-      const info = document.getElementById('license-info');
-      if (data.valid && data.tier === 'pro') {
-        badge.textContent = 'Pro';
-        badge.style.background = '#4ade8020';
-        badge.style.color = '#4ade80';
-        info.style.display = 'block';
-        document.getElementById('license-email').textContent = data.email || '—';
-        document.getElementById('license-expiry').textContent = data.expiresAt ? new Date(data.expiresAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : '—';
-      } else {
-        badge.textContent = 'Free';
-        badge.style.background = '#22d3ee15';
-        badge.style.color = 'var(--text-muted)';
-        info.style.display = 'none';
-      }
-    } catch {}
-  }
-
-  async function activateLicense() {
-    const key = document.getElementById('license-key-input').value.trim();
-    const resultEl = document.getElementById('license-result');
-    if (!key) {
-      resultEl.textContent = 'Please enter a license key';
-      resultEl.className = 'test-result err';
-      return;
-    }
-    resultEl.textContent = 'Activating...';
-    resultEl.className = 'test-result';
-    try {
-      const res = await fetch('/api/license/activate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key })
-      });
-      const data = await res.json();
-      if (data.ok) {
-        resultEl.textContent = '✅ License activated! Tier: ' + data.tier + ', expires ' + new Date(data.expiresAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
-        resultEl.className = 'test-result ok';
-        fetchLicenseStatus();
-      } else {
-        resultEl.textContent = '❌ ' + (data.error || 'Activation failed');
-        resultEl.className = 'test-result err';
-      }
-    } catch (e) {
-      resultEl.textContent = '❌ Network error';
-      resultEl.className = 'test-result err';
-    }
-  }
-
   // --- Save ---
   async function save() {
     const btn = document.getElementById('save-btn');

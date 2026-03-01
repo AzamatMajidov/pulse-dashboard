@@ -224,7 +224,7 @@ app.use(express.json());
 
 // --- Auth Middleware (skips /setup, /api/setup, /api/health, /api/detect/*) ---
 app.use((req, res, next) => {
-  const publicPaths = ['/setup', '/api/setup', '/api/health', '/api/alerts/test', '/admin/license', '/api/license/generate', '/api/license/activate', '/api/license/status'];
+  const publicPaths = ['/setup', '/api/setup', '/api/health', '/api/alerts/test'];
   const isPublic = publicPaths.includes(req.path) || req.path.startsWith('/api/detect');
   if (isPublic) return next();
   if (!CONFIG.auth || !CONFIG.auth.enabled) return next();
@@ -242,7 +242,7 @@ app.use((req, res, next) => {
 // --- Setup Mode Redirect Middleware ---
 app.use((req, res, next) => {
   if (!setupMode) return next();
-  const allowed = ['/setup', '/api/setup', '/api/health', '/admin/license', '/api/license/generate'];
+  const allowed = ['/setup', '/api/setup', '/api/health'];
   const isAllowed = allowed.includes(req.path) || req.path.startsWith('/api/detect');
   if (isAllowed) return next();
   // Allow static assets for setup page
@@ -670,91 +670,6 @@ function formatBytes(bytes) {
 }
 
 // ============================================================
-// T63-T68: License System (Phase 6)
-// ============================================================
-
-const LICENSE_KEYS_DIR = path.join(__dirname, 'data', 'license-keys');
-const LICENSE_PRIVATE_KEY = path.join(LICENSE_KEYS_DIR, 'private.pem');
-const LICENSE_PUBLIC_KEY = path.join(LICENSE_KEYS_DIR, 'public.pem');
-
-// T63 — Generate Ed25519 key pair on first start if not exists
-async function ensureLicenseKeys() {
-  try {
-    await fs.promises.access(LICENSE_PRIVATE_KEY);
-    await fs.promises.access(LICENSE_PUBLIC_KEY);
-  } catch {
-    await fs.promises.mkdir(LICENSE_KEYS_DIR, { recursive: true });
-    const { publicKey, privateKey } = crypto.generateKeyPairSync('ed25519', {
-      publicKeyEncoding: { type: 'spki', format: 'pem' },
-      privateKeyEncoding: { type: 'pkcs8', format: 'pem' }
-    });
-    await fs.promises.writeFile(LICENSE_PRIVATE_KEY, privateKey);
-    await fs.promises.writeFile(LICENSE_PUBLIC_KEY, publicKey);
-    console.log('🔑 License keys generated');
-  }
-}
-
-// Base64url helpers
-function toBase64Url(buf) {
-  return (Buffer.isBuffer(buf) ? buf : Buffer.from(buf))
-    .toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-
-function fromBase64Url(str) {
-  let s = str.replace(/-/g, '+').replace(/_/g, '/');
-  while (s.length % 4) s += '=';
-  return Buffer.from(s, 'base64');
-}
-
-// T64 — Create a signed license key string
-async function createLicense({ email, tier, expiresAt }) {
-  const privateKeyPem = await fs.promises.readFile(LICENSE_PRIVATE_KEY, 'utf8');
-  const payload = JSON.stringify({ email, tier, expiresAt });
-  const payloadB64 = toBase64Url(payload);
-  const signature = crypto.sign(null, Buffer.from(payload), privateKeyPem);
-  const sigB64 = toBase64Url(signature);
-  return payloadB64 + '.' + sigB64;
-}
-
-// T66 — Verify a license key string
-async function verifyLicense(keyString) {
-  try {
-    const parts = keyString.split('.');
-    if (parts.length !== 2) return { valid: false, error: 'Invalid format' };
-    const [payloadB64, sigB64] = parts;
-    const payloadBuf = fromBase64Url(payloadB64);
-    const sigBuf = fromBase64Url(sigB64);
-    const publicKeyPem = await fs.promises.readFile(LICENSE_PUBLIC_KEY, 'utf8');
-    const valid = crypto.verify(null, payloadBuf, publicKeyPem, sigBuf);
-    if (!valid) return { valid: false, error: 'Invalid signature' };
-    const payload = JSON.parse(payloadBuf.toString());
-    if (new Date(payload.expiresAt).getTime() < Date.now()) {
-      return { valid: false, error: 'License expired' };
-    }
-    return { valid: true, payload };
-  } catch (err) {
-    return { valid: false, error: err.message };
-  }
-}
-
-// T69 — Pro middleware: returns 402 if no valid pro license
-async function requirePro(req, res, next) {
-  try {
-    const license = CONFIG.license;
-    if (!license) {
-      return res.status(402).json({ error: 'pro_required', message: 'This feature requires a Pro license' });
-    }
-    const result = await verifyLicense(license);
-    if (!result.valid || result.payload.tier !== 'pro') {
-      return res.status(402).json({ error: 'pro_required', message: 'This feature requires a Pro license' });
-    }
-    next();
-  } catch {
-    res.status(402).json({ error: 'pro_required', message: 'This feature requires a Pro license' });
-  }
-}
-
-// ============================================================
 // T49-T51: History Collector (Phase 5)
 // ============================================================
 
@@ -1136,7 +1051,7 @@ app.get('/api/bots/stats', (req, res) => {
 });
 
 // --- T88: GET /api/costs ---
-app.get('/api/costs', requirePro, async (req, res) => {
+app.get('/api/costs', async (req, res) => {
   try {
     let lines = [];
     try {
@@ -1547,75 +1462,6 @@ app.get('/api/logs/docker/:name', async (req, res) => {
   });
 });
 
-// ============================================================
-// T65-T68: License Routes (Phase 6)
-// ============================================================
-
-// T65 — Admin license page
-app.get('/admin/license', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin-license.html')));
-
-// T65 — Generate a license key (admin-only endpoint)
-app.post('/api/license/generate', async (req, res) => {
-  try {
-    const { email, tier, expiresAt } = req.body;
-    if (!email || !tier || !expiresAt) {
-      return res.status(400).json({ error: 'email, tier, and expiresAt are required' });
-    }
-    if (tier !== 'pro') {
-      return res.status(400).json({ error: 'Only "pro" tier is supported' });
-    }
-    const expDate = new Date(expiresAt);
-    if (isNaN(expDate.getTime())) {
-      return res.status(400).json({ error: 'Invalid expiry date' });
-    }
-    const key = await createLicense({ email, tier, expiresAt: expDate.toISOString() });
-    res.json({ ok: true, key });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// T67 — Activate a license key
-app.post('/api/license/activate', async (req, res) => {
-  try {
-    const { key } = req.body;
-    if (!key || typeof key !== 'string') {
-      return res.status(400).json({ ok: false, error: 'License key is required' });
-    }
-    const result = await verifyLicense(key.trim());
-    if (!result.valid) {
-      return res.status(400).json({ ok: false, error: result.error });
-    }
-    // Store in config.json (read fresh, add license field, write back)
-    CONFIG.license = key.trim();
-    const configPath = path.join(__dirname, 'config.json');
-    const raw = await fs.promises.readFile(configPath, 'utf8');
-    const diskConfig = JSON.parse(raw);
-    diskConfig.license = key.trim();
-    await fs.promises.writeFile(configPath, JSON.stringify(diskConfig, null, 2));
-    res.json({ ok: true, tier: result.payload.tier, email: result.payload.email, expiresAt: result.payload.expiresAt });
-  } catch (err) {
-    res.status(500).json({ ok: false, error: err.message });
-  }
-});
-
-// T68 — License status
-app.get('/api/license/status', async (req, res) => {
-  try {
-    const license = CONFIG.license;
-    if (!license) {
-      return res.json({ tier: 'free', email: null, expiresAt: null, valid: false });
-    }
-    const result = await verifyLicense(license);
-    if (!result.valid) {
-      return res.json({ tier: 'free', email: null, expiresAt: null, valid: false });
-    }
-    res.json({ tier: result.payload.tier, email: result.payload.email, expiresAt: result.payload.expiresAt, valid: true });
-  } catch {
-    res.json({ tier: 'free', email: null, expiresAt: null, valid: false });
-  }
-});
-
 // --- Update ---
 app.get('/api/update/check', async (req, res) => {
   try {
@@ -1667,7 +1513,7 @@ function openclawCmd(profile, cmd) {
 }
 
 // T101 — GET /api/cron/profiles
-app.get('/api/cron/profiles', requirePro, (req, res) => {
+app.get('/api/cron/profiles', (req, res) => {
   const bots = CONFIG.bots || [];
   if (bots.length <= 1) return res.json([]);
   res.json(bots.map(b => ({ name: b.name, profile: b.profile || 'main' })));
@@ -1689,7 +1535,7 @@ async function getCronJobs(profile) {
 }
 
 // T93 — GET /api/cron
-app.get('/api/cron', requirePro, async (req, res) => {
+app.get('/api/cron', async (req, res) => {
   try {
     const profile = req.query.profile || 'main';
     if (!/^[a-zA-Z0-9_-]+$/.test(profile)) {
@@ -1712,7 +1558,7 @@ app.get('/api/cron', requirePro, async (req, res) => {
 });
 
 // T94 — POST /api/cron/:id/toggle
-app.post('/api/cron/:id/toggle', requirePro, async (req, res) => {
+app.post('/api/cron/:id/toggle', async (req, res) => {
   try {
     const { id } = req.params;
     if (!id || !/^[a-zA-Z0-9._:-]+$/.test(id)) {
@@ -1736,7 +1582,7 @@ app.post('/api/cron/:id/toggle', requirePro, async (req, res) => {
 });
 
 // T95 — POST /api/cron/:id/run
-app.post('/api/cron/:id/run', requirePro, async (req, res) => {
+app.post('/api/cron/:id/run', async (req, res) => {
   try {
     const { id } = req.params;
     if (!id || !/^[a-zA-Z0-9._:-]+$/.test(id)) {
@@ -1758,7 +1604,7 @@ app.post('/api/cron/:id/run', requirePro, async (req, res) => {
 });
 
 // T96 — POST /api/cron/create
-app.post('/api/cron/create', requirePro, async (req, res) => {
+app.post('/api/cron/create', async (req, res) => {
   try {
     const { name, schedule, payload } = req.body;
     const profile = req.body.profile || 'main';
@@ -1798,7 +1644,7 @@ app.post('/api/cron/create', requirePro, async (req, res) => {
 });
 
 // T97 — DELETE /api/cron/:id
-app.delete('/api/cron/:id', requirePro, async (req, res) => {
+app.delete('/api/cron/:id', async (req, res) => {
   try {
     const { id } = req.params;
     if (!id || !/^[a-zA-Z0-9._:-]+$/.test(id)) {
@@ -1839,7 +1685,6 @@ app.get('/settings', (req, res) => res.sendFile(path.join(__dirname, 'public', '
 // ============================================================
 async function start() {
   CONFIG = await loadConfig();
-  await ensureLicenseKeys();
 
   if (CONFIG.networkIface === 'auto') {
     CONFIG.networkIface = await detectNetworkIface();
