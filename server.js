@@ -476,6 +476,7 @@ async function fetchBotStatus(name, profile) {
 
     let online = false, lastActive = 'unknown', model = 'unknown';
     let sessions = 0, totalTokens = 0, contextTokens = 200000, contextPercent = 0;
+    let inputTokens = 0, outputTokens = 0, cacheRead = 0, cacheWrite = 0;
     let heartbeatEnabled = false, heartbeatInterval = null, heartbeatEveryMs = null;
     let lastActiveAgeMs = null, sessionStarted = null, activeSessions24h = 0;
 
@@ -489,7 +490,7 @@ async function fetchBotStatus(name, profile) {
       contextTokens = json.sessions?.defaults?.contextTokens || 200000;
 
       // Aggregate tokens across all recent sessions
-      let inputTokens = 0, outputTokens = 0, cacheRead = 0, cacheWrite = 0;
+      inputTokens = 0; outputTokens = 0; cacheRead = 0; cacheWrite = 0;
       for (const s of recent) {
         inputTokens += s.inputTokens || 0;
         outputTokens += s.outputTokens || 0;
