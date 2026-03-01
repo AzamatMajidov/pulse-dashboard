@@ -948,13 +948,12 @@ app.post('/api/setup', async (req, res) => {
     const configPath = path.join(__dirname, 'config.json');
     await fs.promises.writeFile(configPath, JSON.stringify(cfg, null, 2));
 
-    res.json({ ok: true, port: cfg.port });
+    // Hot-reload config in-place (no process restart needed)
+    Object.keys(CONFIG).forEach(k => delete CONFIG[k]);
+    Object.assign(CONFIG, cfg);
+    console.log('Config saved — hot-reloaded');
 
-    // Restart after response is sent
-    setTimeout(() => {
-      console.log('Config saved — restarting...');
-      process.exit(0);
-    }, 300);
+    res.json({ ok: true, port: cfg.port });
   } catch (err) {
     console.error('POST /api/setup error:', err.message);
     res.status(500).json({ error: err.message });

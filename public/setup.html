@@ -534,7 +534,7 @@
 <!-- Restart overlay -->
 <div class="overlay" id="overlay">
   <div class="spinner"></div>
-  <div class="overlay-text">Restarting Pulse...</div>
+  <div class="overlay-text">Saving settings...</div>
   <div class="overlay-sub" id="overlay-sub">Saving your configuration</div>
 </div>
 
@@ -787,7 +787,7 @@
     if (isSettings) {
       document.getElementById('page-title').textContent = 'Settings';
       document.getElementById('page-sub').textContent = 'Update your Pulse configuration';
-      document.getElementById('save-btn').textContent = 'Save & Restart';
+      document.getElementById('save-btn').textContent = 'Save Settings';
       document.getElementById('back-btn').style.display = 'inline-block';
 
       try {
@@ -1265,48 +1265,28 @@
       if (!data.ok) {
         errEl.textContent = data.error || 'Failed to save';
         btn.disabled = false;
-        btn.textContent = isSettings ? 'Save & Restart' : 'Save & Restart';
+        btn.textContent = isSettings ? 'Save Settings' : 'Save Settings';
         return;
       }
 
-      // Show overlay and poll for restart
+      // Config hot-reloaded (no restart needed) — redirect to dashboard
       const overlay = document.getElementById('overlay');
       const overlaySub = document.getElementById('overlay-sub');
       overlay.classList.add('show');
+      overlaySub.textContent = 'Settings saved! Redirecting...';
 
       const newPort = data.port;
       const currentPort = parseInt(window.location.port) || 80;
-
-      overlaySub.textContent = 'Waiting for Pulse to restart...';
-
-      // Poll health endpoint
       const targetOrigin = newPort !== currentPort
         ? `${window.location.protocol}//${window.location.hostname}:${newPort}`
         : window.location.origin;
 
-      let attempts = 0;
-      const poll = setInterval(async () => {
-        attempts++;
-        try {
-          const health = await fetch(`${targetOrigin}/api/health`, { cache: 'no-store' });
-          if (health.ok) {
-            clearInterval(poll);
-            overlaySub.textContent = 'Done! Redirecting...';
-            setTimeout(() => { window.location.href = targetOrigin + '/'; }, 500);
-          }
-        } catch {
-          // Still restarting
-          if (attempts > 30) {
-            clearInterval(poll);
-            overlaySub.textContent = `Done. Open: ${targetOrigin}`;
-          }
-        }
-      }, 1000);
+      setTimeout(() => { window.location.href = targetOrigin + '/'; }, 1000);
 
     } catch (err) {
       errEl.textContent = 'Network error: ' + err.message;
       btn.disabled = false;
-      btn.textContent = 'Save & Restart';
+      btn.textContent = 'Save Settings';
     }
   }
 
