@@ -1573,7 +1573,7 @@
         nameWrap.append(emoji, nameInfo);
 
         const status = document.createElement('div');
-        var isLoading = !bot.online && (bot.lastActive === '...' || bot.model === '...' || bot.lastActive === 'unknown' && bot.model === 'unknown' && bot.uptime === 'N/A' && bot.sessions === 0);
+        var isLoading = false; // bot data resolves immediately, no loading state needed
         status.className = 'bot-status ' + (isLoading ? 'loading' : bot.online ? 'online' : 'offline');
         status.textContent = isLoading ? '◌ Loading...' : bot.online ? '\u25CF Online' : '\u25CF Offline';
 
