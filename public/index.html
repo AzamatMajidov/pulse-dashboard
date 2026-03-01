@@ -1604,7 +1604,7 @@
         var tokenStr = formatTokens(bot.totalTokens || 0) + '/' + formatTokens(bot.contextTokens || 200000);
         var ctxPct = bot.contextPercent || 0;
         [
-          ['Sessions', (bot.sessions || 0).toString()],
+          ['Active (24h)', (bot.activeSessions24h || 0).toString()],
           ['Tokens', tokenStr + ' (' + ctxPct + '%)'],
           ['Heartbeat', bot.heartbeatEnabled ? (bot.heartbeatInterval || 'on') : 'off']
         ].forEach(function([label, value]) {
