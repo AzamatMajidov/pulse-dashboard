@@ -38,14 +38,14 @@ else
   echo "✅ config.json already exists"
 fi
 
-# Create systemd user service
-SERVICE_DIR="$HOME/.config/systemd/user"
-SERVICE_FILE="$SERVICE_DIR/pulse.service"
+# Create systemd service
 PULSE_DIR="$(cd "$(dirname "$0")" && pwd)"
+NODE_BIN="$(which node)"
 
-mkdir -p "$SERVICE_DIR"
-
-cat > "$SERVICE_FILE" <<EOF
+if [ "$(id -u)" -eq 0 ]; then
+  # Running as root — use system-level service
+  SERVICE_FILE="/etc/systemd/system/pulse.service"
+  cat > "$SERVICE_FILE" <<EOF
 [Unit]
 Description=Pulse Dashboard
 After=network.target
@@ -53,9 +53,37 @@ After=network.target
 [Service]
 Type=simple
 WorkingDirectory=${PULSE_DIR}
-ExecStart=$(which node) ${PULSE_DIR}/server.js
-Restart=on-failure
-RestartSec=5
+ExecStart=${NODE_BIN} ${PULSE_DIR}/server.js
+Restart=always
+RestartSec=2
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+  systemctl daemon-reload
+  systemctl enable pulse
+  systemctl start pulse
+  echo "✅ Systemd service created (system-level)"
+else
+  # Running as regular user — use user-level service + linger
+  SERVICE_DIR="$HOME/.config/systemd/user"
+  SERVICE_FILE="$SERVICE_DIR/pulse.service"
+  mkdir -p "$SERVICE_DIR"
+
+  cat > "$SERVICE_FILE" <<EOF
+[Unit]
+Description=Pulse Dashboard
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=${PULSE_DIR}
+ExecStart=${NODE_BIN} ${PULSE_DIR}/server.js
+Restart=always
+RestartSec=2
+Environment=NODE_ENV=production
 StandardOutput=journal
 StandardError=journal
 
@@ -63,12 +91,18 @@ StandardError=journal
 WantedBy=default.target
 EOF
 
-echo "✅ Systemd service created at $SERVICE_FILE"
+  systemctl --user daemon-reload
+  systemctl --user enable pulse
+  systemctl --user start pulse
 
-# Enable and start
-systemctl --user daemon-reload
-systemctl --user enable pulse
-systemctl --user start pulse
+  # Enable linger so service survives logout/reboot
+  if command -v loginctl &>/dev/null; then
+    loginctl enable-linger "$(whoami)" 2>/dev/null && \
+      echo "✅ Linger enabled (service survives reboot)" || \
+      echo "⚠️  Run: sudo loginctl enable-linger $(whoami)  — so Pulse survives reboot"
+  fi
+  echo "✅ Systemd service created (user-level)"
+fi
 
 echo ""
 echo "✅ Pulse is running!"
@@ -82,11 +116,21 @@ echo "🌐 Access your dashboard at:"
 echo "   http://localhost:${PORT}"
 echo "   http://${IP}:${PORT}"
 echo ""
-echo "📝 To customize: edit config.json, then run:"
-echo "   systemctl --user restart pulse"
-echo ""
-echo "📋 Logs:"
-echo "   journalctl --user -u pulse -f"
+if [ "$(id -u)" -eq 0 ]; then
+  echo "📝 Manage:"
+  echo "   systemctl restart pulse"
+  echo "   systemctl status pulse"
+  echo ""
+  echo "📋 Logs:"
+  echo "   journalctl -u pulse -f"
+else
+  echo "📝 Manage:"
+  echo "   systemctl --user restart pulse"
+  echo "   systemctl --user status pulse"
+  echo ""
+  echo "📋 Logs:"
+  echo "   journalctl --user -u pulse -f"
+fi
 echo ""
 
 # Firewall hint if ufw is present
