@@ -411,12 +411,21 @@ async function getDockerContainers() {
 }
 
 // --- Systemd Services ---
+// Try system-level systemctl first, fall back to user-level
+async function systemctl(cmd) {
+  try {
+    return await run(`systemctl ${cmd}`);
+  } catch {
+    return await run(`systemctl --user ${cmd}`);
+  }
+}
+
 async function getSystemdServices() {
   const results = [];
   for (const svc of CONFIG.systemdServices) {
     try {
-      const status = await run(`systemctl --user is-active ${svc}`);
-      const tsRaw = await run(`systemctl --user show ${svc} --property=ActiveEnterTimestamp`);
+      const status = await systemctl(`is-active ${svc}`);
+      const tsRaw = await systemctl(`show ${svc} --property=ActiveEnterTimestamp`);
       const ts = tsRaw.replace('ActiveEnterTimestamp=', '').trim();
       const active = status === 'active';
       let uptime = 'N/A';
@@ -532,7 +541,7 @@ async function fetchBotStatus(name, profile) {
 
     // Uptime from systemd
     const svcName = profile ? `openclaw-${profile}` : 'openclaw-gateway';
-    const tsRaw = await run(`systemctl --user show ${svcName} --property=ActiveEnterTimestamp`);
+    const tsRaw = await systemctl(`show ${svcName} --property=ActiveEnterTimestamp`);
     const ts = tsRaw.replace('ActiveEnterTimestamp=', '').trim();
     let uptime = 'N/A';
     if (ts) {
@@ -980,7 +989,9 @@ app.get('/api/detect/docker', async (req, res) => {
 // --- Auto-detect: systemd user services ---
 app.get('/api/detect/services', async (req, res) => {
   try {
-    const out = await run('systemctl --user list-units --type=service --state=active --no-legend --no-pager');
+    let out = '';
+      try { out = await run('systemctl list-units --type=service --state=active --no-legend --no-pager'); } catch {}
+      try { out += '\n' + await run('systemctl --user list-units --type=service --state=active --no-legend --no-pager'); } catch {}
     const services = out.split('\n')
       .filter(Boolean)
       .map(line => line.trim().split(/\s+/)[0].replace('.service', ''))
