@@ -1396,7 +1396,18 @@ app.get('/api/logs/service/:name', (req, res) => {
   });
   res.flushHeaders();
 
-  const child = spawn('journalctl', ['--user', '-u', name, '-f', '--no-pager', '-n', '50'], {
+  // Try system-level first, fall back to user-level
+  const { execSync } = require('child_process');
+  let useUser = true;
+  try {
+    const test = execSync(`journalctl -u ${name} -n 1 --no-pager 2>&1`, { timeout: 3000 }).toString();
+    if (test && !test.includes('No entries')) useUser = false;
+  } catch {}
+
+  const args = useUser
+    ? ['--user', '-u', name, '-f', '--no-pager', '-n', '50']
+    : ['-u', name, '-f', '--no-pager', '-n', '50'];
+  const child = spawn('journalctl', args, {
     stdio: ['ignore', 'pipe', 'pipe'],
   });
 
